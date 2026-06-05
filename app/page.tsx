@@ -18,7 +18,11 @@ interface ActivityItem {
 export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // State untuk nama user yang lagi aktif (biar checklist dinamis)
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
+  
+  // State untuk menyimpan ID postingan yang udah di-like
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
 
   const [form, setForm] = useState({
@@ -30,6 +34,7 @@ export default function FitPoinHome() {
     reps: ''
   });
 
+  // Fitur Login Instan & Load Jempol dari localStorage saat web pertama dibuka
   useEffect(() => {
     const savedName = localStorage.getItem('fitpoin_user');
     if (savedName) {
@@ -43,10 +48,11 @@ export default function FitPoinHome() {
     setLikedPosts(savedLikes);
   }, []);
 
-  const isUserTarget = useCallback((name: string) => {
+  const isUserTarget = (name: string) => {
+    if (!name) return false;
     const n = name.toLowerCase();
     return n.includes('ail') || n.includes('ailum');
-  }, []);
+  };
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -73,9 +79,13 @@ export default function FitPoinHome() {
   }, []);
 
   useEffect(() => {
-    fetchFeed();
+    const loadData = async () => {
+      await fetchFeed();
+    };
+    loadData().catch(console.error);
   }, [fetchFeed]);
 
+  // 1. HITUNG PROGRESS DETAIL PERSONAL SECARA DINAMIS (Anti Nyangkut & Bisa Dicicil)
   const userActivities = activities.filter(act => isUserTarget(act.username));
 
   const statsPersonal = {
@@ -87,6 +97,7 @@ export default function FitPoinHome() {
     lariBiasa: userActivities.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
   };
 
+  // 2. LOGIKA KLASEMEN PERLOMBAAN SECARA DINAMIS
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
   activities.forEach(act => {
     if (!rekapKlasemen[act.username]) {
@@ -154,8 +165,10 @@ export default function FitPoinHome() {
 
       if (res.ok && result.success) {
         alert(result.message);
+        
         localStorage.setItem('fitpoin_user', form.username);
         setCurrentUser(form.username); 
+        
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
         setTimeout(() => { fetchFeed(); }, 500);
       } else {
@@ -172,6 +185,7 @@ export default function FitPoinHome() {
     }
 
     setActivities(prev => prev.map(act => act._id === id ? { ...act, kudosCount: currentKudos + 1 } : act));
+    
     const newLikes = [...likedPosts, id];
     setLikedPosts(newLikes);
     localStorage.setItem('fitpoin_likes', JSON.stringify(newLikes));
@@ -192,7 +206,6 @@ export default function FitPoinHome() {
     const konfirmasi = confirm("Serius mau hapus sesi latihan ini dari liga, cuy?");
     if (!konfirmasi) return;
 
-    // Optimistic UI update (Hapus langsung dari layar biar responsif)
     setActivities(prev => prev.filter(act => act._id !== id));
 
     try {
@@ -264,7 +277,7 @@ export default function FitPoinHome() {
           </div>
 
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.plankMenit >= SYARAT.plank ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Plank</span>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Blank</span>
             <div className="text-sm font-black mb-1">{statsPersonal.plankMenit} / {SYARAT.plank} Menit</div>
             <div className="flex justify-center">{statsPersonal.plankMenit >= SYARAT.plank ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
@@ -416,7 +429,9 @@ export default function FitPoinHome() {
               activities.map((act) => {
                 const isUserLariSempurna = act.activityType === 'Lari' && act.distance >= 2.5 && act.duration <= 15;
                 const isLiked = likedPosts.includes(act._id);
-                const isMyPost = act.username.toLowerCase() === currentUser.toLowerCase();
+                
+                // KOREKSI UTAMA: Menggunakan fungsi isUserTarget biar aman dari typo huruf kapital
+                const isMyPost = isUserTarget(act.username);
                 
                 return (
                   <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden">
@@ -438,14 +453,14 @@ export default function FitPoinHome() {
                             🎯 Sempurna
                           </span>
                         )}
-                        {/* TOMBOL HAPUS OTOMATIS MUNCUL JIKA INI POSTINGAN LU */}
+                        {/* TOMBOL TRASH AKAN SELALU MUNCUL SEKARANG DI POSTINGAN LU */}
                         {isMyPost && (
                           <button 
                             onClick={() => handleDeleteActivity(act._id)}
-                            className="text-slate-400 hover:text-red-400 p-1 transition-colors"
+                            className="text-slate-400 hover:text-red-500 p-1 rounded-md bg-slate-800/50 hover:bg-red-500/10 border border-slate-700/50 transition-all ml-1"
                             title="Hapus Sesi Salah Input"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={15} />
                           </button>
                         )}
                       </div>
