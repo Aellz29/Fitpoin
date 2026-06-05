@@ -26,13 +26,12 @@ export default function FitPoinHome() {
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
 
-  // State Akumulasi Target Personal Khusus User Utama (Ailum Mukhlish)
   const [statsPersonal, setStatsPersonal] = useState({
     pushUp: 0,
     sitUp: 0,
     pullUp: 0,
     plankMenit: 0,
-    lariSempurna: false, // Jarak >= 2.5 KM && Waktu <= 15 Menit
+    lariSempurna: false, 
     lariBiasa: 0
   });
 
@@ -45,6 +44,22 @@ export default function FitPoinHome() {
     reps: ''
   });
 
+  // Fitur Login Instan: Tarik nama dari localStorage saat web pertama dibuka
+  useEffect(() => {
+    const savedName = localStorage.getItem('fitpoin_user');
+    if (savedName) {
+      setForm(prev => ({ ...prev, username: savedName }));
+    } else {
+      setForm(prev => ({ ...prev, username: 'Ailum Mukhlish' }));
+    }
+  }, []);
+
+  // Fungsi pintar untuk mendeteksi variasi nama lu (Ailum/ail)
+  const isUserTarget = (name: string) => {
+    const n = name.toLowerCase();
+    return n.includes('ail') || n.includes('ailum');
+  };
+
   const fetchFeed = useCallback(async () => {
     try {
       const res = await fetch('/api/activities');
@@ -52,7 +67,6 @@ export default function FitPoinHome() {
       if (result.success) {
         let dbData = result.data;
         
-        // Mockup awal biar kompetisi langsung ramai pas di-load pertama kali
         if (dbData.length === 0) {
           dbData = [
             { _id: 'm1', username: 'Rian', activityType: 'Push Up', title: 'Push Up subuh brutal', distance: 0, duration: 10, reps: 50, kudosCount: 5, earnedXP: 520, createdAt: new Date(Date.now() - 3600000).toISOString() },
@@ -63,12 +77,11 @@ export default function FitPoinHome() {
 
         setActivities(dbData);
 
-        // 1. HITUNG PROGRESS DETAIL PERSONAL (Khusus yang input namanya 'Ailum Mukhlish')
-        const userTarget = 'Ailum Mukhlish';
+        // 1. HITUNG PROGRESS DETAIL PERSONAL (Fleksibel nangkep "ail" & "Ailum Mukhlish")
         let pPush = 0, pSit = 0, pPull = 0, pPlank = 0, pLariSempurna = false, pLariBiasa = 0;
 
         dbData.forEach((act: ActivityItem) => {
-          if (act.username.toLowerCase() === userTarget.toLowerCase()) {
+          if (isUserTarget(act.username)) {
             if (act.activityType === 'Push Up') pPush += Number(act.reps || 0);
             if (act.activityType === 'Sit Up') pSit += Number(act.reps || 0);
             if (act.activityType === 'Pull Up') pPull += Number(act.reps || 0);
@@ -125,10 +138,8 @@ export default function FitPoinHome() {
     loadData().catch(console.error);
   }, [fetchFeed]);
 
-  // Syarat Batas Target Sempurna Seminggu
   const SYARAT = { push: 50, sit: 50, pull: 50, plank: 1 };
 
-  // Hitung total checklist yang terpenuhi
   const checklistTerpenuhi = 
     (statsPersonal.pushUp >= SYARAT.push ? 1 : 0) +
     (statsPersonal.sitUp >= SYARAT.sit ? 1 : 0) +
@@ -136,7 +147,6 @@ export default function FitPoinHome() {
     (statsPersonal.plankMenit >= SYARAT.plank ? 1 : 0) +
     (statsPersonal.lariSempurna ? 1 : 0);
 
-  // Menggunakan nama variabel persentaseProgress secara konsisten agar tidak crash
   const persentaseProgress = Math.round((checklistTerpenuhi / 5) * 100);
 
   const hitungEstimasiXP = () => {
@@ -177,6 +187,10 @@ export default function FitPoinHome() {
 
       if (res.ok && result.success) {
         alert(result.message);
+        
+        // Simpan nama lu ke localStorage biar auto-login di masa depan
+        localStorage.setItem('fitpoin_user', form.username);
+        
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
         await fetchFeed();
       } else {
@@ -189,7 +203,6 @@ export default function FitPoinHome() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white font-sans p-4 md:p-8">
-      {/* Header */}
       <header className="max-w-5xl mx-auto flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
         <h1 className="text-3xl font-black tracking-tight text-orange-500">
           FIT<span className="text-white font-light">POIN</span>
@@ -200,7 +213,6 @@ export default function FitPoinHome() {
         </div>
       </header>
 
-      {/* SEKSI DIAGNOSIS TARGET PERSONAL LU (Ailum Mukhlish) */}
       <section className="max-w-5xl mx-auto bg-[#1e293b] border border-slate-700 rounded-xl p-5 mb-8 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
@@ -218,7 +230,6 @@ export default function FitPoinHome() {
           </div>
         </div>
 
-        {/* Loading Bar Progress */}
         <div className="w-full bg-[#0f172a] rounded-full h-3 border border-slate-800 overflow-hidden mb-5">
           <div 
             className="bg-gradient-to-r from-red-500 via-orange-500 to-green-500 h-3 rounded-full transition-all duration-500 ease-out"
@@ -226,37 +237,31 @@ export default function FitPoinHome() {
           ></div>
         </div>
 
-        {/* GRID INDIKATOR CHECKLIST */}
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-          {/* Push Up Card */}
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.pushUp >= SYARAT.push ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
             <span className="text-xs font-semibold text-slate-400 block mb-1">Push Up</span>
             <div className="text-sm font-black mb-1">{statsPersonal.pushUp} / {SYARAT.push} Reps</div>
             <div className="flex justify-center">{statsPersonal.pushUp >= SYARAT.push ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
-          {/* Sit Up Card */}
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.sitUp >= SYARAT.sit ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
             <span className="text-xs font-semibold text-slate-400 block mb-1">Sit Up</span>
             <div className="text-sm font-black mb-1">{statsPersonal.sitUp} / {SYARAT.sit} Reps</div>
             <div className="flex justify-center">{statsPersonal.sitUp >= SYARAT.sit ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
-          {/* Pull Up Card */}
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.pullUp >= SYARAT.pull ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
             <span className="text-xs font-semibold text-slate-400 block mb-1">Pull Up</span>
             <div className="text-sm font-black mb-1">{statsPersonal.pullUp} / {SYARAT.pull} Reps</div>
             <div className="flex justify-center">{statsPersonal.pullUp >= SYARAT.pull ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
-          {/* Plank Card */}
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.plankMenit >= SYARAT.plank ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
             <span className="text-xs font-semibold text-slate-400 block mb-1">Plank</span>
             <div className="text-sm font-black mb-1">{statsPersonal.plankMenit} / {SYARAT.plank} Menit</div>
             <div className="flex justify-center">{statsPersonal.plankMenit >= SYARAT.plank ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
-          {/* Lari Sempurna Card */}
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.lariSempurna ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
             <span className="text-xs font-semibold text-slate-400 block mb-1">Lari Sempurna</span>
             <div className="text-[10px] text-slate-400 leading-tight mb-1">
@@ -267,10 +272,7 @@ export default function FitPoinHome() {
         </div>
       </section>
 
-      {/* Main Grid Layout */}
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        {/* Kiri: Form Input Olahraga Manual */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -285,7 +287,7 @@ export default function FitPoinHome() {
                 className="w-full bg-[#0f172a] border border-slate-600 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
                 value={form.username} onChange={e => setForm({...form, username: e.target.value})}
               />
-              <p className="text-[10px] text-slate-500 mt-1">*Ketik &apos;Ailum Mukhlish&apos; untuk sinkronisasi checklist di atas.</p>
+              <p className="text-[10px] text-slate-500 mt-1">*Nama akan tersimpan otomatis untuk sesi berikutnya.</p>
             </div>
 
             <div>
@@ -362,10 +364,7 @@ export default function FitPoinHome() {
           </form>
         </div>
 
-        {/* Kanan: Klasemen Liga & Linimasa */}
         <div className="md:col-span-2 space-y-6">
-          
-          {/* SEKSI LEADERBOARD PERLOMBAAN */}
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 text-yellow-400" />
@@ -374,13 +373,13 @@ export default function FitPoinHome() {
             
             <div className="divide-y divide-slate-800">
               {leaderboard.map((user, index) => (
-                <div key={user.username} className={`flex items-center justify-between py-2.5 ${user.username.toLowerCase() === 'ailum mukhlish' ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
+                <div key={user.username} className={`flex items-center justify-between py-2.5 ${isUserTarget(user.username) ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
                   <div className="flex items-center gap-3">
                     <span className="w-5 text-center font-bold text-sm text-slate-400">
                       {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
                     </span>
-                    <span className={`text-sm font-bold ${user.username.toLowerCase() === 'ailum mukhlish' ? 'text-orange-400' : 'text-white'}`}>
-                      {user.username} {user.username.toLowerCase() === 'ailum mukhlish' && '(Lu)'}
+                    <span className={`text-sm font-bold ${isUserTarget(user.username) ? 'text-orange-400' : 'text-white'}`}>
+                      {user.username} {isUserTarget(user.username) && '(Lu)'}
                     </span>
                   </div>
                   <div className="flex items-center gap-6 text-right">
@@ -398,7 +397,6 @@ export default function FitPoinHome() {
             </div>
           </div>
 
-          {/* LINIMASA AKTIVITAS */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-2">
               <Flame className="w-5 h-5 text-orange-500" />
@@ -415,8 +413,8 @@ export default function FitPoinHome() {
                   <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h3 className={`font-bold text-sm ${act.username.toLowerCase() === 'ailum mukhlish' ? 'text-orange-400' : 'text-blue-400'}`}>
-                          {act.username} {act.username.toLowerCase() === 'ailum mukhlish' && '(Lu)'}
+                        <h3 className={`font-bold text-sm ${isUserTarget(act.username) ? 'text-orange-400' : 'text-blue-400'}`}>
+                          {act.username} {isUserTarget(act.username) && '(Lu)'}
                         </h3>
                         <span className="text-[11px] text-slate-400">
                           {new Date(act.createdAt).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}
