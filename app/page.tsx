@@ -53,7 +53,6 @@ export default function FitPoinHome() {
     return n.includes('ail') || n.includes('ailum');
   };
 
-  // fetchFeed sekarang cukup ambil data mentah saja biar tidak ada state yang nyangkut[cite: 2]
   const fetchFeed = useCallback(async () => {
     try {
       const res = await fetch('/api/activities');
@@ -75,7 +74,7 @@ export default function FitPoinHome() {
     loadData().catch(console.error);
   }, [fetchFeed]);
 
-  // 1. HITUNG PROGRESS DETAIL PERSONAL SECARA DINAMIS (Anti Nyangkut)
+  // 1. HITUNG PROGRESS DETAIL PERSONAL SECARA DINAMIS (Anti Nyangkut & Bisa Dicicil)
   const userActivities = activities.filter(act => isUserTarget(act.username));
 
   const statsPersonal = {
@@ -87,7 +86,7 @@ export default function FitPoinHome() {
     lariBiasa: userActivities.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
   };
 
-  // 2. LOGIKA KLASEMEN PERLOMBAAN SECARA DINAMIS[cite: 2]
+  // 2. LOGIKA KLASEMEN PERLOMBAAN SECARA DINAMIS
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
   activities.forEach(act => {
     if (!rekapKlasemen[act.username]) {
@@ -135,10 +134,14 @@ export default function FitPoinHome() {
       return;
     }
     
+    // PERBAIKAN: Payload di-casting jadi Angka murni agar data reps diproses database
     const payload = {
-      ...form,
-      distance: form.activityType === 'Lari' ? form.distance : '0',
-      reps: ['Push Up', 'Sit Up', 'Pull Up'].includes(form.activityType) ? form.reps : '0'
+      username: form.username,
+      activityType: form.activityType,
+      title: form.title,
+      duration: Number(form.duration || 0),
+      distance: form.activityType === 'Lari' ? Number(form.distance || 0) : 0,
+      reps: ['Push Up', 'Sit Up', 'Pull Up'].includes(form.activityType) ? Number(form.reps || 0) : 0
     };
 
     try {
@@ -154,7 +157,7 @@ export default function FitPoinHome() {
         alert(result.message);
         
         localStorage.setItem('fitpoin_user', form.username);
-        setCurrentUser(form.username); // Update UI Checklist langsung
+        setCurrentUser(form.username); 
         
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
         await fetchFeed();
@@ -172,15 +175,12 @@ export default function FitPoinHome() {
       return alert('Sabar cuy, lu udah ngasih jempol ke aktivitas ini!');
     }
 
-    // Update UI instan (Optimistic UI)
     setActivities(prev => prev.map(act => act._id === id ? { ...act, kudosCount: currentKudos + 1 } : act));
     
-    // Simpan ke local storage device
     const newLikes = [...likedPosts, id];
     setLikedPosts(newLikes);
     localStorage.setItem('fitpoin_likes', JSON.stringify(newLikes));
 
-    // Kirim update ke database
     try {
       await fetch('/api/activities', {
         method: 'PUT',

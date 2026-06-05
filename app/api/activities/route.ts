@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { connectMongoDB } from '@/lib/mongodb';
 import Activity from '@/models/Activity';
 
-// FUNGSI TARIK DATA (Tampil di Timeline)
 export async function GET() {
   try {
     await connectMongoDB();
@@ -14,20 +13,17 @@ export async function GET() {
   }
 }
 
-// FUNGSI SIMPAN DATA OLAHRAGA (Dari Form)
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { username, activityType, title, distance, duration, reps } = body;
 
-    // Validasi field wajib
     if (!username || !activityType || !title || !duration) {
       return NextResponse.json({ success: false, message: 'Mohon isi semua field wajib!' }, { status: 400 });
     }
 
     await connectMongoDB();
 
-    // LOGIKA HITUNG ESTIMASI XP
     let totalXP = 0;
     const dist = Number(distance || 0);
     const dur = Number(duration || 0);
@@ -41,7 +37,6 @@ export async function POST(req: Request) {
       totalXP = (rp * 10) + (dur * 2);
     }
 
-    // Simpan ke MongoDB Atlas
     const newActivity = await Activity.create({
       username,
       activityType,
@@ -65,7 +60,6 @@ export async function POST(req: Request) {
   }
 }
 
-// FUNGSI TAMBAH KUDOS / JEMPOL
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
@@ -77,7 +71,6 @@ export async function PUT(req: Request) {
 
     await connectMongoDB();
     
-    // Cari aktivitas berdasarkan ID, lalu tambah kudosCount sebanyak 1
     const updatedActivity = await Activity.findByIdAndUpdate(
       id,
       { $inc: { kudosCount: 1 } },
