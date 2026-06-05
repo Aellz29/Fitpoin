@@ -18,11 +18,7 @@ interface ActivityItem {
 export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // State untuk nama user yang lagi aktif (biar checklist dinamis)
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
-  
-  // State untuk menyimpan ID postingan yang udah di-like
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
 
   const [form, setForm] = useState({
@@ -34,7 +30,6 @@ export default function FitPoinHome() {
     reps: ''
   });
 
-  // Fitur Login Instan & Load Jempol dari localStorage saat web pertama dibuka
   useEffect(() => {
     const savedName = localStorage.getItem('fitpoin_user');
     if (savedName) {
@@ -48,17 +43,33 @@ export default function FitPoinHome() {
     setLikedPosts(savedLikes);
   }, []);
 
-  const isUserTarget = (name: string) => {
+  const isUserTarget = useCallback((name: string) => {
     const n = name.toLowerCase();
     return n.includes('ail') || n.includes('ailum');
-  };
+  }, []);
 
   const fetchFeed = useCallback(async () => {
     try {
       const res = await fetch('/api/activities');
       const result = await res.json();
       if (result.success) {
-        setActivities(result.data);
+        
+        // TRIK DEWA: Reverse Engineering Reps yang dibuang oleh Database
+        const fixedData = result.data.map((act: ActivityItem) => {
+          let rp = Number(act.reps || 0);
+          
+          // Jika reps dari database 0 padahal latihannya ada repetisi, kita hitung mundur dari XP!
+          if (rp === 0 && ['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType)) {
+            const xp = Number(act.earnedXP || 0);
+            const dur = Number(act.duration || 0);
+            // Rumus asli: XP = (reps * 10) + (dur * 2)  =>  Reps = (XP - (dur * 2)) / 10
+            rp = Math.max(0, (xp - (dur * 2)) / 10);
+          }
+          
+          return { ...act, reps: rp };
+        });
+
+        setActivities(fixedData);
       }
     } catch (error) {
       console.error('Gagal mengambil timeline:', error);
@@ -68,13 +79,9 @@ export default function FitPoinHome() {
   }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchFeed();
-    };
-    loadData().catch(console.error);
+    fetchFeed();
   }, [fetchFeed]);
 
-  // 1. HITUNG PROGRESS DETAIL PERSONAL SECARA DINAMIS (Anti Nyangkut & Bisa Dicicil)
   const userActivities = activities.filter(act => isUserTarget(act.username));
 
   const statsPersonal = {
@@ -86,14 +93,13 @@ export default function FitPoinHome() {
     lariBiasa: userActivities.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
   };
 
-  // 2. LOGIKA KLASEMEN PERLOMBAAN SECARA DINAMIS
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
   activities.forEach(act => {
     if (!rekapKlasemen[act.username]) {
       rekapKlasemen[act.username] = { totalSesi: 0, totalXP: 0 };
     }
     rekapKlasemen[act.username].totalSesi += 1;
-    rekapKlasemen[act.username].totalXP += act.earnedXP;
+    rekapKlasemen[act.username].totalXP += Number(act.earnedXP || 0);
   });
 
   const leaderboard = Object.keys(rekapKlasemen).map(nama => ({
@@ -134,7 +140,6 @@ export default function FitPoinHome() {
       return;
     }
     
-    // PERBAIKAN: Payload di-casting jadi Angka murni agar data reps diproses database
     const payload = {
       username: form.username,
       activityType: form.activityType,
@@ -160,7 +165,11 @@ export default function FitPoinHome() {
         setCurrentUser(form.username); 
         
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
-        await fetchFeed();
+        
+        // Delay kecil agar database selesai sinkronisasi sebelum di-fetch ulang
+        setTimeout(() => {
+          fetchFeed();
+        }, 500);
       } else {
         alert(result.message || 'Gagal menyimpan aktivitas');
       }
@@ -169,7 +178,6 @@ export default function FitPoinHome() {
     }
   };
 
-  // 3. FUNGSI MEMBERI KUDOS / JEMPOL (Sesuai Device)
   const handleKudos = async (id: string, currentKudos: number) => {
     if (likedPosts.includes(id)) {
       return alert('Sabar cuy, lu udah ngasih jempol ke aktivitas ini!');
