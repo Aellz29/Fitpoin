@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectMongoDB } from '@/lib/mongodb';
 import Activity from '@/models/Activity';
 
+// FUNGSI TARIK DATA (Tampil di Timeline)
 export async function GET() {
   try {
     await connectMongoDB();
@@ -13,6 +14,7 @@ export async function GET() {
   }
 }
 
+// FUNGSI SIMPAN DATA OLAHRAGA (Dari Form)
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
 
     await connectMongoDB();
 
-    // LOGIKA HITUNG ESTIMASI XP (Disamakan persis dengan rumus di page.tsx lu)
+    // LOGIKA HITUNG ESTIMASI XP
     let totalXP = 0;
     const dist = Number(distance || 0);
     const dur = Number(duration || 0);
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
       totalXP = (rp * 10) + (dur * 2);
     }
 
-    // Simpan ke MongoDB Atlas dengan skema lengkap
+    // Simpan ke MongoDB Atlas
     const newActivity = await Activity.create({
       username,
       activityType,
@@ -60,5 +62,31 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('Error POST activities:', error);
     return NextResponse.json({ success: false, message: 'Gagal simpan data' }, { status: 500 });
+  }
+}
+
+// FUNGSI TAMBAH KUDOS / JEMPOL
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { id } = body;
+    
+    if (!id) {
+      return NextResponse.json({ success: false, message: 'ID aktivitas tidak valid' }, { status: 400 });
+    }
+
+    await connectMongoDB();
+    
+    // Cari aktivitas berdasarkan ID, lalu tambah kudosCount sebanyak 1
+    const updatedActivity = await Activity.findByIdAndUpdate(
+      id,
+      { $inc: { kudosCount: 1 } },
+      { new: true }
+    );
+
+    return NextResponse.json({ success: true, message: 'Kudos berhasil ditambah!', data: updatedActivity }, { status: 200 });
+  } catch (error) {
+    console.error('Error PUT kudos:', error);
+    return NextResponse.json({ success: false, message: 'Gagal update data kudos' }, { status: 500 });
   }
 }

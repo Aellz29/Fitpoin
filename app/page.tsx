@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusCircle, Flame, Dumbbell, Award, ThumbsUp, CheckCircle, AlertTriangle, Trophy, Check, X } from 'lucide-react';
+import { PlusCircle, Flame, Dumbbell, Award, ThumbsUp, CheckCircle, Trophy, Check, X } from 'lucide-react';
 
 interface ActivityItem {
   _id: string;
@@ -15,25 +15,15 @@ interface ActivityItem {
   createdAt: string;
 }
 
-interface LeaderboardUser {
-  username: string;
-  totalSesi: number;
-  totalXP: number;
-}
-
 export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
-
-  const [statsPersonal, setStatsPersonal] = useState({
-    pushUp: 0,
-    sitUp: 0,
-    pullUp: 0,
-    plankMenit: 0,
-    lariSempurna: false, 
-    lariBiasa: 0
-  });
+  
+  // State untuk nama user yang lagi aktif (biar checklist dinamis)
+  const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
+  
+  // State untuk menyimpan ID postingan yang udah di-like
+  const [likedPosts, setLikedPosts] = useState<string[]>([]);
 
   const [form, setForm] = useState({
     username: '', 
@@ -44,85 +34,32 @@ export default function FitPoinHome() {
     reps: ''
   });
 
-  // Fitur Login Instan: Tarik nama dari localStorage saat web pertama dibuka
+  // Fitur Login Instan & Load Jempol dari localStorage saat web pertama dibuka
   useEffect(() => {
     const savedName = localStorage.getItem('fitpoin_user');
     if (savedName) {
       setForm(prev => ({ ...prev, username: savedName }));
+      setCurrentUser(savedName);
     } else {
       setForm(prev => ({ ...prev, username: 'Ailum Mukhlish' }));
     }
+
+    const savedLikes = JSON.parse(localStorage.getItem('fitpoin_likes') || '[]');
+    setLikedPosts(savedLikes);
   }, []);
 
-  // Fungsi pintar untuk mendeteksi variasi nama lu (Ailum/ail)
   const isUserTarget = (name: string) => {
     const n = name.toLowerCase();
     return n.includes('ail') || n.includes('ailum');
   };
 
+  // fetchFeed sekarang cukup ambil data mentah saja biar tidak ada state yang nyangkut[cite: 2]
   const fetchFeed = useCallback(async () => {
     try {
       const res = await fetch('/api/activities');
       const result = await res.json();
       if (result.success) {
-        let dbData = result.data;
-        
-        if (dbData.length === 0) {
-          dbData = [
-            { _id: 'm1', username: 'Rian', activityType: 'Push Up', title: 'Push Up subuh brutal', distance: 0, duration: 10, reps: 50, kudosCount: 5, earnedXP: 520, createdAt: new Date(Date.now() - 3600000).toISOString() },
-            { _id: 'm2', username: 'Fahmi', activityType: 'Lari', title: 'Mengejar matahari pagi', distance: 5, duration: 30, reps: 0, kudosCount: 3, earnedXP: 400, createdAt: new Date(Date.now() - 7200000).toISOString() },
-            { _id: 'm3', username: 'Zaki', activityType: 'Plank', title: 'Nahan posisi plank', distance: 0, duration: 2, reps: 0, kudosCount: 2, earnedXP: 30, createdAt: new Date(Date.now() - 10800000).toISOString() },
-          ];
-        }
-
-        setActivities(dbData);
-
-        // 1. HITUNG PROGRESS DETAIL PERSONAL (Fleksibel nangkep "ail" & "Ailum Mukhlish")
-        let pPush = 0, pSit = 0, pPull = 0, pPlank = 0, pLariSempurna = false, pLariBiasa = 0;
-
-        dbData.forEach((act: ActivityItem) => {
-          if (isUserTarget(act.username)) {
-            if (act.activityType === 'Push Up') pPush += Number(act.reps || 0);
-            if (act.activityType === 'Sit Up') pSit += Number(act.reps || 0);
-            if (act.activityType === 'Pull Up') pPull += Number(act.reps || 0);
-            if (act.activityType === 'Plank') pPlank += Number(act.duration || 0);
-            if (act.activityType === 'Lari') {
-              if (Number(act.distance || 0) >= 2.5 && Number(act.duration || 0) <= 15) {
-                pLariSempurna = true;
-              } else {
-                pLariBiasa += 1;
-              }
-            }
-          }
-        });
-
-        setStatsPersonal({
-          pushUp: pPush,
-          sitUp: pSit,
-          pullUp: pPull,
-          plankMenit: pPlank,
-          lariSempurna: pLariSempurna,
-          lariBiasa: pLariBiasa
-        });
-
-        // 2. LOGIKA KLASEMEN PERLOMBAAN
-        const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
-        
-        dbData.forEach((act: ActivityItem) => {
-          if (!rekapKlasemen[act.username]) {
-            rekapKlasemen[act.username] = { totalSesi: 0, totalXP: 0 };
-          }
-          rekapKlasemen[act.username].totalSesi += 1;
-          rekapKlasemen[act.username].totalXP += act.earnedXP;
-        });
-
-        const urutanKlasemen = Object.keys(rekapKlasemen).map(nama => ({
-          username: nama,
-          totalSesi: rekapKlasemen[nama].totalSesi,
-          totalXP: rekapKlasemen[nama].totalXP
-        })).sort((a, b) => b.totalSesi - a.totalSesi || b.totalXP - a.totalXP);
-
-        setLeaderboard(urutanKlasemen);
+        setActivities(result.data);
       }
     } catch (error) {
       console.error('Gagal mengambil timeline:', error);
@@ -137,6 +74,34 @@ export default function FitPoinHome() {
     };
     loadData().catch(console.error);
   }, [fetchFeed]);
+
+  // 1. HITUNG PROGRESS DETAIL PERSONAL SECARA DINAMIS (Anti Nyangkut)
+  const userActivities = activities.filter(act => isUserTarget(act.username));
+
+  const statsPersonal = {
+    pushUp: userActivities.filter(a => a.activityType === 'Push Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
+    sitUp: userActivities.filter(a => a.activityType === 'Sit Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
+    pullUp: userActivities.filter(a => a.activityType === 'Pull Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
+    plankMenit: userActivities.filter(a => a.activityType === 'Plank').reduce((sum, a) => sum + Number(a.duration || 0), 0),
+    lariSempurna: userActivities.some(a => a.activityType === 'Lari' && Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15),
+    lariBiasa: userActivities.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
+  };
+
+  // 2. LOGIKA KLASEMEN PERLOMBAAN SECARA DINAMIS[cite: 2]
+  const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
+  activities.forEach(act => {
+    if (!rekapKlasemen[act.username]) {
+      rekapKlasemen[act.username] = { totalSesi: 0, totalXP: 0 };
+    }
+    rekapKlasemen[act.username].totalSesi += 1;
+    rekapKlasemen[act.username].totalXP += act.earnedXP;
+  });
+
+  const leaderboard = Object.keys(rekapKlasemen).map(nama => ({
+    username: nama,
+    totalSesi: rekapKlasemen[nama].totalSesi,
+    totalXP: rekapKlasemen[nama].totalXP
+  })).sort((a, b) => b.totalSesi - a.totalSesi || b.totalXP - a.totalXP);
 
   const SYARAT = { push: 50, sit: 50, pull: 50, plank: 1 };
 
@@ -188,8 +153,8 @@ export default function FitPoinHome() {
       if (res.ok && result.success) {
         alert(result.message);
         
-        // Simpan nama lu ke localStorage biar auto-login di masa depan
         localStorage.setItem('fitpoin_user', form.username);
+        setCurrentUser(form.username); // Update UI Checklist langsung
         
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
         await fetchFeed();
@@ -198,6 +163,32 @@ export default function FitPoinHome() {
       }
     } catch (error) {
       console.error('Error saat submit:', error);
+    }
+  };
+
+  // 3. FUNGSI MEMBERI KUDOS / JEMPOL (Sesuai Device)
+  const handleKudos = async (id: string, currentKudos: number) => {
+    if (likedPosts.includes(id)) {
+      return alert('Sabar cuy, lu udah ngasih jempol ke aktivitas ini!');
+    }
+
+    // Update UI instan (Optimistic UI)
+    setActivities(prev => prev.map(act => act._id === id ? { ...act, kudosCount: currentKudos + 1 } : act));
+    
+    // Simpan ke local storage device
+    const newLikes = [...likedPosts, id];
+    setLikedPosts(newLikes);
+    localStorage.setItem('fitpoin_likes', JSON.stringify(newLikes));
+
+    // Kirim update ke database
+    try {
+      await fetch('/api/activities', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+    } catch (error) {
+      console.error('Gagal nambah kudos di DB', error);
     }
   };
 
@@ -218,7 +209,7 @@ export default function FitPoinHome() {
           <div>
             <h2 className="text-base font-bold text-slate-200 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-400" />
-              Checklist Target Fisik Mingguan (Ailum Mukhlish)
+              Checklist Target Fisik Mingguan ({currentUser})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Ketahui item latihan yang belum lu penuhi untuk mencapai kondisi fisik sempurna pekan ini.
@@ -408,6 +399,7 @@ export default function FitPoinHome() {
             ) : (
               activities.map((act) => {
                 const isUserLariSempurna = act.activityType === 'Lari' && act.distance >= 2.5 && act.duration <= 15;
+                const isLiked = likedPosts.includes(act._id);
                 
                 return (
                   <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg">
@@ -454,9 +446,12 @@ export default function FitPoinHome() {
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
-                      <button className="text-xs flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-md text-slate-300 font-semibold">
-                        <ThumbsUp className="w-3.5 h-3.5 text-orange-500" />
-                        Beri Kudos ({act.kudosCount})
+                      <button 
+                        onClick={() => handleKudos(act._id, act.kudosCount)}
+                        className={`text-xs flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-all ${isLiked ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}`}
+                      >
+                        <ThumbsUp className={`w-3.5 h-3.5 ${isLiked ? 'text-orange-500' : 'text-slate-400'}`} />
+                        {isLiked ? 'Jempol Diberikan' : 'Beri Kudos'} ({act.kudosCount})
                       </button>
                     </div>
                   </div>
