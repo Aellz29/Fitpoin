@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusCircle, Flame, Dumbbell, Award, ThumbsUp, CheckCircle, Trophy, Check, X } from 'lucide-react';
+import { PlusCircle, Flame, Dumbbell, Award, ThumbsUp, CheckCircle, Trophy, Check, X, Trash2 } from 'lucide-react';
 
 interface ActivityItem {
   _id: string;
@@ -53,22 +53,16 @@ export default function FitPoinHome() {
       const res = await fetch('/api/activities');
       const result = await res.json();
       if (result.success) {
-        
-        // TRIK DEWA: Reverse Engineering Reps yang dibuang oleh Database
+        // Trik reverse engineering dari sesi sebelumnya agar reps aman
         const fixedData = result.data.map((act: ActivityItem) => {
           let rp = Number(act.reps || 0);
-          
-          // Jika reps dari database 0 padahal latihannya ada repetisi, kita hitung mundur dari XP!
           if (rp === 0 && ['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType)) {
             const xp = Number(act.earnedXP || 0);
             const dur = Number(act.duration || 0);
-            // Rumus asli: XP = (reps * 10) + (dur * 2)  =>  Reps = (XP - (dur * 2)) / 10
             rp = Math.max(0, (xp - (dur * 2)) / 10);
           }
-          
           return { ...act, reps: rp };
         });
-
         setActivities(fixedData);
       }
     } catch (error) {
@@ -160,16 +154,10 @@ export default function FitPoinHome() {
 
       if (res.ok && result.success) {
         alert(result.message);
-        
         localStorage.setItem('fitpoin_user', form.username);
         setCurrentUser(form.username); 
-        
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
-        
-        // Delay kecil agar database selesai sinkronisasi sebelum di-fetch ulang
-        setTimeout(() => {
-          fetchFeed();
-        }, 500);
+        setTimeout(() => { fetchFeed(); }, 500);
       } else {
         alert(result.message || 'Gagal menyimpan aktivitas');
       }
@@ -184,7 +172,6 @@ export default function FitPoinHome() {
     }
 
     setActivities(prev => prev.map(act => act._id === id ? { ...act, kudosCount: currentKudos + 1 } : act));
-    
     const newLikes = [...likedPosts, id];
     setLikedPosts(newLikes);
     localStorage.setItem('fitpoin_likes', JSON.stringify(newLikes));
@@ -197,6 +184,27 @@ export default function FitPoinHome() {
       });
     } catch (error) {
       console.error('Gagal nambah kudos di DB', error);
+    }
+  };
+
+  // FUNGSI BARU: TRIGGER HAPUS DATA KLASEMEN
+  const handleDeleteActivity = async (id: string) => {
+    const konfirmasi = confirm("Serius mau hapus sesi latihan ini dari liga, cuy?");
+    if (!konfirmasi) return;
+
+    // Optimistic UI update (Hapus langsung dari layar biar responsif)
+    setActivities(prev => prev.filter(act => act._id !== id));
+
+    try {
+      const res = await fetch(`/api/activities?id=${id}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (result.success) {
+        await fetchFeed();
+      } else {
+        alert(result.message);
+      }
+    } catch (error) {
+      console.error('Gagal menghapus aktivitas:', error);
     }
   };
 
@@ -408,9 +416,10 @@ export default function FitPoinHome() {
               activities.map((act) => {
                 const isUserLariSempurna = act.activityType === 'Lari' && act.distance >= 2.5 && act.duration <= 15;
                 const isLiked = likedPosts.includes(act._id);
+                const isMyPost = act.username.toLowerCase() === currentUser.toLowerCase();
                 
                 return (
-                  <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg">
+                  <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden">
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h3 className={`font-bold text-sm ${isUserTarget(act.username) ? 'text-orange-400' : 'text-blue-400'}`}>
@@ -420,14 +429,24 @@ export default function FitPoinHome() {
                           {new Date(act.createdAt).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-2">
                         <span className="bg-[#0f172a] text-xs px-3 py-1 rounded-full border border-slate-600 font-semibold flex items-center gap-1">
                           <Dumbbell className="w-3 h-3 text-orange-400" /> {act.activityType}
                         </span>
                         {isUserLariSempurna && (
-                          <span className="bg-green-500/20 text-green-400 border border-green-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider animate-bounce">
+                          <span className="bg-green-500/20 text-green-400 border border-green-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
                             🎯 Sempurna
                           </span>
+                        )}
+                        {/* TOMBOL HAPUS OTOMATIS MUNCUL JIKA INI POSTINGAN LU */}
+                        {isMyPost && (
+                          <button 
+                            onClick={() => handleDeleteActivity(act._id)}
+                            className="text-slate-400 hover:text-red-400 p-1 transition-colors"
+                            title="Hapus Sesi Salah Input"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -467,7 +486,6 @@ export default function FitPoinHome() {
               })
             )}
           </div>
-
         </div>
       </main>
     </div>

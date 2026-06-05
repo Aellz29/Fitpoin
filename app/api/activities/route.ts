@@ -83,3 +83,23 @@ export async function PUT(req: Request) {
     return NextResponse.json({ success: false, message: 'Gagal update data kudos' }, { status: 500 });
   }
 }
+
+// FUNGSI BARU: HAPUS AKTIVITAS
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ success: false, message: 'ID tidak ditemukan' }, { status: 400 });
+    }
+
+    await connectMongoDB();
+    await Activity.findByIdAndDelete(id);
+
+    return NextResponse.json({ success: true, message: 'Aktivitas berhasil dihapus dari liga!' }, { status: 200 });
+  } catch (error) {
+    console.error('Error DELETE activity:', error);
+    return NextResponse.json({ success: false, message: 'Gagal menghapus data' }, { status: 500 });
+  }
+}
