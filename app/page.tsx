@@ -19,7 +19,6 @@ export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // State user & UI
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
   const [klasemenView, setKlasemenView] = useState<'pekan' | 'bulan'>('pekan');
@@ -33,7 +32,6 @@ export default function FitPoinHome() {
     reps: ''
   });
 
-  // Load data awal dari Local Storage
   useEffect(() => {
     const savedName = localStorage.getItem('fitpoin_user');
     if (savedName) {
@@ -47,13 +45,11 @@ export default function FitPoinHome() {
     setLikedPosts(savedLikes);
   }, []);
 
-  // Validasi Kepemilikan Data yang Super Ketat
   const isMyPost = useCallback((name: string) => {
     if (!name || !currentUser) return false;
     return name.toLowerCase().trim() === currentUser.toLowerCase().trim();
   }, [currentUser]);
 
-  // Fetch API & Trik Reverse Engineering Reps
   const fetchFeed = useCallback(async () => {
     try {
       const res = await fetch('/api/activities');
@@ -81,11 +77,10 @@ export default function FitPoinHome() {
     fetchFeed();
   }, [fetchFeed]);
 
-  // PENGATURAN WAKTU (Mingguan & Bulanan)
   const getStartOfWeek = () => {
     const d = new Date();
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Mundur ke hari Senin
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     d.setDate(diff);
     d.setHours(0, 0, 0, 0);
     return d.getTime();
@@ -104,7 +99,7 @@ export default function FitPoinHome() {
   const activitiesThisWeek = activities.filter(act => new Date(act.createdAt).getTime() >= startOfWeek);
   const activitiesThisMonth = activities.filter(act => new Date(act.createdAt).getTime() >= startOfMonth);
 
-  // 1. STATISTIK PERSONAL (Target Mingguan - Hanya ngitung aktivitas sendiri)
+  // 1. STATISTIK PERSONAL MINGGU INI
   const userActivitiesThisWeek = activitiesThisWeek.filter(act => isMyPost(act.username));
 
   const statsPersonal = {
@@ -126,9 +121,9 @@ export default function FitPoinHome() {
 
   const persentaseProgress = Math.round((checklistTerpenuhi / 5) * 100);
 
-  // 2. LOGIKA KLASEMEN (Dinasmis toggle Pekan vs Bulan)
+  // 2. LOGIKA KLASEMEN & FIRE STREAK
   const dataForKlasemen = klasemenView === 'pekan' ? activitiesThisWeek : activitiesThisMonth;
-  const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
+  const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number; } } = {};
   
   dataForKlasemen.forEach(act => {
     if (!rekapKlasemen[act.username]) {
@@ -138,13 +133,25 @@ export default function FitPoinHome() {
     rekapKlasemen[act.username].totalXP += Number(act.earnedXP || 0);
   });
 
-  const leaderboard = Object.keys(rekapKlasemen).map(nama => ({
-    username: nama,
-    totalSesi: rekapKlasemen[nama].totalSesi,
-    totalXP: rekapKlasemen[nama].totalXP
-  })).sort((a, b) => b.totalSesi - a.totalSesi || b.totalXP - a.totalXP);
+  const leaderboard = Object.keys(rekapKlasemen).map(nama => {
+    const userActs = dataForKlasemen.filter(act => act.username === nama);
 
-  // ESTIMASI XP (Form)
+    // HITUNG BERAPA LATIHAN YANG BERES TANPA CICIL!
+    let fireCount = 0;
+    if (userActs.some(a => a.activityType === 'Push Up' && Number(a.reps) >= 50)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Sit Up' && Number(a.reps) >= 50)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Pull Up' && Number(a.reps) >= 50)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Plank' && Number(a.duration) >= 1)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Lari' && Number(a.distance) >= 2.5 && Number(a.duration) <= 15)) fireCount++;
+
+    return {
+      username: nama,
+      totalSesi: rekapKlasemen[nama].totalSesi,
+      totalXP: rekapKlasemen[nama].totalXP,
+      fireCount
+    };
+  }).sort((a, b) => b.totalXP - a.totalXP || b.totalSesi - a.totalSesi);
+
   const hitungEstimasiXP = () => {
     const dist = Number(form.distance || 0);
     const dur = Number(form.duration || 0);
@@ -155,7 +162,6 @@ export default function FitPoinHome() {
     return (rp * 10) + (dur * 2);
   };
 
-  // HANDLERS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.username.trim()) {
@@ -231,7 +237,20 @@ export default function FitPoinHome() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white font-sans p-4 md:p-8">
-      {/* HEADER */}
+      
+      {/* CSS KHUSUS API MEMBARA BERGERAK */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes burn {
+          0% { transform: translateY(0) rotate(-10deg) scale(1); filter: drop-shadow(0 0 2px rgba(255,100,0,0.5)); }
+          50% { transform: translateY(-2px) rotate(10deg) scale(1.2); filter: drop-shadow(0 0 8px rgba(255,100,0,0.8)); }
+          100% { transform: translateY(0) rotate(-10deg) scale(1); filter: drop-shadow(0 0 2px rgba(255,100,0,0.5)); }
+        }
+        .fire-icon { 
+          animation: burn 0.8s infinite ease-in-out; 
+          display: inline-block; 
+        }
+      `}} />
+
       <header className="max-w-5xl mx-auto flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
         <h1 className="text-3xl font-black tracking-tight text-orange-500">
           FIT<span className="text-white font-light">POIN</span>
@@ -242,7 +261,6 @@ export default function FitPoinHome() {
         </div>
       </header>
 
-      {/* CHECKLIST TARGET */}
       <section className="max-w-5xl mx-auto bg-[#1e293b] border border-slate-700 rounded-xl p-5 mb-8 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
@@ -303,7 +321,6 @@ export default function FitPoinHome() {
       </section>
 
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* KOLOM KIRI: FORM */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -395,7 +412,6 @@ export default function FitPoinHome() {
           </form>
         </div>
 
-        {/* KOLOM KANAN: KLASEMEN & TIMELINE */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -404,7 +420,6 @@ export default function FitPoinHome() {
                 <h2 className="text-lg font-bold text-slate-200">Klasemen Liga Latihan</h2>
               </div>
               
-              {/* TOMBOL TOGGLE (Pekan vs Bulan) */}
               <div className="flex bg-[#0f172a] rounded-lg p-1 border border-slate-700">
                 <button 
                   onClick={() => setKlasemenView('pekan')}
@@ -433,9 +448,19 @@ export default function FitPoinHome() {
                         <span className="w-5 text-center font-bold text-sm text-slate-400">
                           {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
                         </span>
-                        <span className={`text-sm font-bold ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
+                        
+                        {/* RENDER NAMA & API MEMBARA JIKA DIA BERES TANPA CICIL */}
+                        <span className={`text-sm font-bold flex items-center gap-1 ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
                           {user.username} {isMeKlasemen && '(Lu)'}
+                          {user.fireCount > 0 && (
+                            <span className="flex gap-0.5 ml-1">
+                              {[...Array(user.fireCount)].map((_, i) => (
+                                <span key={i} className="fire-icon text-base" style={{ animationDelay: `${i * 0.15}s` }}>🔥</span>
+                              ))}
+                            </span>
+                          )}
                         </span>
+
                       </div>
                       <div className="flex items-center gap-6 text-right">
                         <div>
@@ -464,9 +489,21 @@ export default function FitPoinHome() {
               <p className="text-slate-500 text-sm animate-pulse">Memuat linimasa...</p>
             ) : (
               activities.map((act) => {
-                const isUserLariSempurna = act.activityType === 'Lari' && act.distance >= 2.5 && act.duration <= 15;
                 const isLiked = likedPosts.includes(act._id);
                 const isMeFeed = isMyPost(act.username);
+
+                // CEK APAKAH INI AKTIVITAS "NO CICIL" / "SEMPURNA"
+                const rp = Number(act.reps || 0);
+                const dur = Number(act.duration || 0);
+                const dist = Number(act.distance || 0);
+
+                const isNoCicilPush = act.activityType === 'Push Up' && rp >= 50;
+                const isNoCicilSit = act.activityType === 'Sit Up' && rp >= 50;
+                const isNoCicilPull = act.activityType === 'Pull Up' && rp >= 50;
+                const isNoCicilPlank = act.activityType === 'Plank' && dur >= 1;
+                const isLariSempurna = act.activityType === 'Lari' && dist >= 2.5 && dur <= 15;
+
+                const isSavageMode = isNoCicilPush || isNoCicilSit || isNoCicilPull || isNoCicilPlank || isLariSempurna;
 
                 return (
                   <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden">
@@ -483,12 +520,14 @@ export default function FitPoinHome() {
                         <span className="bg-[#0f172a] text-xs px-3 py-1 rounded-full border border-slate-600 font-semibold flex items-center gap-1">
                           <Dumbbell className="w-3 h-3 text-orange-400" /> {act.activityType}
                         </span>
-                        {isUserLariSempurna && (
-                          <span className="bg-green-500/20 text-green-400 border border-green-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                            🎯 Sempurna
+                        
+                        {/* BADGE API MEMBARA DI LINIMASA */}
+                        {isSavageMode && (
+                          <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+                            <span className="fire-icon text-xs">🔥</span> {act.activityType === 'Lari' ? 'SEMPURNA' : 'NO CICIL'}
                           </span>
                         )}
-                        {/* TOMBOL TRASH DIKUNCI KHUSUS DEVICE PEMILIK */}
+
                         {isMeFeed && (
                           <button 
                             onClick={() => handleDeleteActivity(act._id)}
