@@ -60,7 +60,17 @@ export default function FitPoinHome() {
       const res = await fetch('/api/activities');
       const result = await res.json();
       if (result.success) {
-        setActivities(result.data);
+        // HACK DIKEMBALIKAN: Ini yang bikin data lama lu kemaren jadi 0 karena fungsi ini kehapus wkwk
+        const fixedData = result.data.map((act: ActivityItem) => {
+          let rp = Number(act.reps || 0);
+          if (rp === 0 && ['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType)) {
+            const xp = Number(act.earnedXP || 0);
+            const dur = Number(act.duration || 0);
+            rp = Math.max(0, (xp - (dur * 2)) / 10);
+          }
+          return { ...act, reps: rp };
+        });
+        setActivities(fixedData);
       }
     } catch (error) {
       console.error('Gagal mengambil timeline:', error);
@@ -387,7 +397,7 @@ export default function FitPoinHome() {
 
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* FORM INPUT DENGAN LABEL BARU SESUAI GAMBAR LU */}
+        {/* FORM INPUT SESUAI GAMBAR TERAKHIR */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -440,7 +450,7 @@ export default function FitPoinHome() {
                 </div>
               ) : ['Push Up', 'Sit Up', 'Pull Up'].includes(form.activityType) ? (
                 <div>
-                  {/* DIUBAH MENJADI: Jumlah */}
+                  {/* LABEL: Jumlah */}
                   <label className="block text-xs text-orange-400 mb-1 font-bold">Jumlah</label>
                   <input 
                     type="number" required placeholder="Cth: 50"
@@ -458,7 +468,7 @@ export default function FitPoinHome() {
               )}
 
               <div>
-                {/* DIUBAH MENJADI: Reps (Kecuali Lari/Plank) */}
+                {/* LABEL: Reps (Tarikan) */}
                 <label className="block text-xs text-orange-400 mb-1 font-bold">
                   {form.activityType === 'Lari' || form.activityType === 'Plank' ? 'Durasi (Menit)' : 'Reps'}
                 </label>
@@ -483,7 +493,7 @@ export default function FitPoinHome() {
           </form>
         </div>
 
-        {/* REKAP KLASEMEN DENGAN GAMIFIKASI */}
+        {/* REKAP KLASEMEN */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -534,7 +544,6 @@ export default function FitPoinHome() {
                               </span>
                             )}
                           </span>
-                          {/* BADGE LEVEL */}
                           <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border mt-1 inline-block w-max ${badge.styling}`}>
                             {badge.icon} {badge.label}
                           </span>
@@ -620,7 +629,6 @@ export default function FitPoinHome() {
                     
                     <div className="grid grid-cols-3 gap-2 bg-[#0f172a] p-3 rounded-lg border border-slate-800 text-center mb-4">
                       <div>
-                        {/* UPDATE LABEL TIMELINE JUGA */}
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
                           {act.activityType === 'Lari' ? 'Jarak' : act.activityType === 'Plank' ? 'Target' : 'Jumlah'}
                         </div>

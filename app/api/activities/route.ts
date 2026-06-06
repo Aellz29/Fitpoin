@@ -25,22 +25,22 @@ export async function POST(req: Request) {
     await connectMongoDB();
 
     let totalXP = 0;
-    const nominal = Number(reps || 0);       // Input Form "Jumlah" (Nominal Reps)
-    const tarikan = Number(duration || 0);   // Input Form "Waktu" (Tarikan / Menit)
+    const nominal = Number(reps || 0);       // Input "Jumlah" (Nominal Reps)
+    const tarikan = Number(duration || 0);   // Input "Reps" (Tarikan / Menit)
     const dist = Number(distance || 0);
 
     if (activityType === 'Lari') {
-      totalXP = (dist * 50) + (tarikan * 5); // tarikan dipakai sebagai menit
+      totalXP = (dist * 50) + (tarikan * 5); // tarikan sbg menit
     } else if (activityType === 'Plank') {
-      totalXP = tarikan * 15;                // tarikan dipakai sebagai menit
+      totalXP = tarikan * 15;                // tarikan sbg menit
     } else {
-      // LOGIKA XP TERBALIK: Makin sedikit tarikan, makin gede XP-nya!
+      // LOGIKA XP TERBALIK: 1x Tarikan = XP Gila!
       let multiplier = 5; // Default kalau dicicil 3x atau lebih
       
       if (tarikan <= 1) {
-        multiplier = 20; // 1x Tarikan (Savage Mode)
+        multiplier = 20; // 1x Reps (Savage Mode)
       } else if (tarikan === 2) {
-        multiplier = 10; // 2x Tarikan (Setengahnya)
+        multiplier = 10; // 2x Reps (Setengahnya)
       }
 
       totalXP = nominal * multiplier;
