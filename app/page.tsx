@@ -8,7 +8,7 @@ interface ActivityItem {
   activityType: string;
   title: string;
   distance: number;
-  duration: number; // Dipakai untuk Tarikan / Menit
+  duration: number; // Dipakai untuk Reps (Berapa Kali Tarikan / Menit)
   reps?: number;    // Dipakai untuk Jumlah Nominal
   kudosCount: number;
   earnedXP: number;
@@ -95,7 +95,7 @@ export default function FitPoinHome() {
   const activitiesThisWeek = activities.filter(act => new Date(act.createdAt).getTime() >= startOfWeek);
   const activitiesThisMonth = activities.filter(act => new Date(act.createdAt).getTime() >= startOfMonth);
 
-  // STATISTIK PROGRESS MINGGUAN USER AKTIF (Hanya Nominal Total)
+  // STATISTIK PROGRESS MINGGUAN USER AKTIF
   const userActivitiesThisWeek = activitiesThisWeek.filter(act => isMyPost(act.username));
 
   const statsPersonal = {
@@ -138,7 +138,7 @@ export default function FitPoinHome() {
   const leaderboard = Object.keys(rekapKlasemen).map(nama => {
     const userActs = dataForKlasemen.filter(act => act.username === nama);
 
-    // LOGIKA STREAK API: Dihitung per 1 Sesi Masuk dgn tarikan <= 1
+    // LOGIKA STREAK API: Dihitung kalau beres 1x Reps (Tarikan) tanpa dicicil
     let fireCount = 0;
     if (userActs.some(a => a.activityType === 'Push Up' && Number(a.reps) >= 50 && Number(a.duration) <= 1)) fireCount++;
     if (userActs.some(a => a.activityType === 'Sit Up' && Number(a.reps) >= 50 && Number(a.duration) <= 1)) fireCount++;
@@ -154,7 +154,7 @@ export default function FitPoinHome() {
     };
   }).sort((a, b) => b.totalXP - a.totalXP || b.totalSesi - a.totalSesi);
 
-  // PREDIKSI ESTIMASI XP DI FRONTEND
+  // LOGIKA PREDIKSI XP DI FRONTEND
   const hitungEstimasiXP = () => {
     const dist = Number(form.distance || 0);
     const tarikan = Number(form.duration || 0);
@@ -163,12 +163,11 @@ export default function FitPoinHome() {
     if (form.activityType === 'Lari') return (dist * 50) + (tarikan * 5);
     if (form.activityType === 'Plank') return tarikan * 15;
     
-    // Logika Tarikan -> XP
     let multiplier = 5;
-    if (tarikan <= 1) multiplier = 20;
-    else if (tarikan === 2) multiplier = 10;
+    if (tarikan <= 1) multiplier = 20; // 1x Reps (Savage!)
+    else if (tarikan === 2) multiplier = 10; // 2x Reps
     
-    return (nominal * multiplier);
+    return nominal * multiplier;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -326,13 +325,13 @@ export default function FitPoinHome() {
         </div>
       </header>
 
-      {/* BOX CHECKLIST MINGGUAN */}
+      {/* BOX CHECKLIST MINGGUAN DENGAN LABELS TOTAL */}
       <section className="max-w-5xl mx-auto bg-[#1e293b] border border-slate-700 rounded-xl p-5 mb-8 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h2 className="text-base font-bold text-slate-200 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-400" />
-              Target Perulangan Mingguan ({currentUser})
+              Target Perulangan & Repetisi Mingguan ({currentUser})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Skor akumulasi ini otomatis ter-reset setiap hari Senin jam 00:00.
@@ -353,19 +352,19 @@ export default function FitPoinHome() {
 
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.pushUp >= SYARAT.push ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Push Up (Total Reps)</span>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Push Up (Total)</span>
             <div className="text-sm font-black mb-1">{statsPersonal.pushUp} / {SYARAT.push}</div>
             <div className="flex justify-center">{statsPersonal.pushUp >= SYARAT.push ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.sitUp >= SYARAT.sit ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Sit Up (Total Reps)</span>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Sit Up (Total)</span>
             <div className="text-sm font-black mb-1">{statsPersonal.sitUp} / {SYARAT.sit}</div>
             <div className="flex justify-center">{statsPersonal.sitUp >= SYARAT.sit ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.pullUp >= SYARAT.pull ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Pull Up (Total Reps)</span>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Pull Up (Total)</span>
             <div className="text-sm font-black mb-1">{statsPersonal.pullUp} / {SYARAT.pull}</div>
             <div className="flex justify-center">{statsPersonal.pullUp >= SYARAT.pull ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
@@ -388,7 +387,7 @@ export default function FitPoinHome() {
 
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* FORM INPUT DENGAN LABEL NOMINAL & TARIKAN */}
+        {/* FORM INPUT DENGAN LABEL BARU SESUAI GAMBAR LU */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -419,7 +418,7 @@ export default function FitPoinHome() {
               <label className="block text-xs text-slate-400 mb-1 font-medium">Jenis Latihan</label>
               <select 
                 className="w-full bg-[#0f172a] border border-slate-600 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
-                value={form.activityType} onChange={e => setForm({...form, activityType: e.target.value, distance: '', reps: ''})}
+                value={form.activityType} onChange={e => setForm({...form, activityType: e.target.value, distance: '', reps: '', duration: ''})}
               >
                 <option value="Lari">Lari 🏃‍♂️</option>
                 <option value="Push Up">Push Up 💪</option>
@@ -441,7 +440,8 @@ export default function FitPoinHome() {
                 </div>
               ) : ['Push Up', 'Sit Up', 'Pull Up'].includes(form.activityType) ? (
                 <div>
-                  <label className="block text-xs text-orange-400 mb-1 font-bold">Jumlah Nominal</label>
+                  {/* DIUBAH MENJADI: Jumlah */}
+                  <label className="block text-xs text-orange-400 mb-1 font-bold">Jumlah</label>
                   <input 
                     type="number" required placeholder="Cth: 50"
                     className="w-full bg-[#0f172a] border border-orange-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
@@ -458,11 +458,12 @@ export default function FitPoinHome() {
               )}
 
               <div>
+                {/* DIUBAH MENJADI: Reps (Kecuali Lari/Plank) */}
                 <label className="block text-xs text-orange-400 mb-1 font-bold">
-                  {form.activityType === 'Lari' || form.activityType === 'Plank' ? 'Durasi (Menit)' : 'Berapa Tarikan'}
+                  {form.activityType === 'Lari' || form.activityType === 'Plank' ? 'Durasi (Menit)' : 'Reps'}
                 </label>
                 <input 
-                  type="number" required placeholder={form.activityType === 'Lari' || form.activityType === 'Plank' ? "Menit" : "Cth: 1 (1x beres)"}
+                  type="number" required placeholder={form.activityType === 'Lari' || form.activityType === 'Plank' ? "Menit" : "Cth: 1"}
                   className="w-full bg-[#0f172a] border border-orange-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
                   value={form.duration} onChange={e => setForm({...form, duration: e.target.value})}
                 />
@@ -482,7 +483,7 @@ export default function FitPoinHome() {
           </form>
         </div>
 
-        {/* REKAP KLASEMEN (DENGAN BADGE GAMIFIKASI) */}
+        {/* REKAP KLASEMEN DENGAN GAMIFIKASI */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -513,7 +514,7 @@ export default function FitPoinHome() {
               ) : (
                 leaderboard.map((user, index) => {
                   const isMeKlasemen = isMyPost(user.username);
-                  const badge = getBadgeLevel(user.totalXP); // LOGIKA LEVEL GAMIFIKASI
+                  const badge = getBadgeLevel(user.totalXP);
                   
                   return (
                     <div key={user.username} className={`flex items-center justify-between py-3 ${isMeKlasemen ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
@@ -533,7 +534,7 @@ export default function FitPoinHome() {
                               </span>
                             )}
                           </span>
-                          {/* BADGE LEVEL DITAMPILKAN DI BAWAH NAMA */}
+                          {/* BADGE LEVEL */}
                           <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border mt-1 inline-block w-max ${badge.styling}`}>
                             {badge.icon} {badge.label}
                           </span>
@@ -570,7 +571,7 @@ export default function FitPoinHome() {
                 const isMeFeed = isMyPost(act.username);
 
                 const rp = Number(act.reps || 0);
-                const dur = Number(act.duration || 0); // Di sini act.duration = Tarikan
+                const dur = Number(act.duration || 0);
                 const dist = Number(act.distance || 0);
 
                 const isNoCicilPush = act.activityType === 'Push Up' && rp >= 50 && dur <= 1;
@@ -619,16 +620,17 @@ export default function FitPoinHome() {
                     
                     <div className="grid grid-cols-3 gap-2 bg-[#0f172a] p-3 rounded-lg border border-slate-800 text-center mb-4">
                       <div>
+                        {/* UPDATE LABEL TIMELINE JUGA */}
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
-                          {act.activityType === 'Lari' ? 'Jarak' : act.activityType === 'Plank' ? 'Target' : 'Nominal'}
+                          {act.activityType === 'Lari' ? 'Jarak' : act.activityType === 'Plank' ? 'Target' : 'Jumlah'}
                         </div>
                         <div className="text-base font-black text-white">
-                          {act.activityType === 'Lari' ? `${act.distance} KM` : act.activityType === 'Plank' ? 'Isometric' : `${act.reps || 0} Reps`}
+                          {act.activityType === 'Lari' ? `${act.distance} KM` : act.activityType === 'Plank' ? 'Isometric' : `${act.reps || 0}`}
                         </div>
                       </div>
                       <div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
-                          {['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType) ? 'Tarikan' : 'Waktu'}
+                          {['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType) ? 'Reps' : 'Waktu'}
                         </div>
                         <div className="text-base font-black text-white">
                           {act.duration} <span className="text-xs font-normal text-slate-400">{['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType) ? 'Kali' : 'Min'}</span>
