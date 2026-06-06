@@ -8,8 +8,8 @@ interface ActivityItem {
   activityType: string;
   title: string;
   distance: number;
-  duration: number;
-  reps?: number;
+  duration: number; // Dipakai untuk Tarikan / Menit
+  reps?: number;    // Dipakai untuk Jumlah Nominal
   kudosCount: number;
   earnedXP: number;
   createdAt: string;
@@ -60,16 +60,7 @@ export default function FitPoinHome() {
       const res = await fetch('/api/activities');
       const result = await res.json();
       if (result.success) {
-        const fixedData = result.data.map((act: ActivityItem) => {
-          let rp = Number(act.reps || 0);
-          if (rp === 0 && ['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType)) {
-            const xp = Number(act.earnedXP || 0);
-            const dur = Number(act.duration || 0);
-            rp = Math.max(0, (xp - (dur * 2)) / 10);
-          }
-          return { ...act, reps: rp };
-        });
-        setActivities(fixedData);
+        setActivities(result.data);
       }
     } catch (error) {
       console.error('Gagal mengambil timeline:', error);
@@ -104,7 +95,7 @@ export default function FitPoinHome() {
   const activitiesThisWeek = activities.filter(act => new Date(act.createdAt).getTime() >= startOfWeek);
   const activitiesThisMonth = activities.filter(act => new Date(act.createdAt).getTime() >= startOfMonth);
 
-  // STATISTIK PROGRESS MINGGUAN USER AKTIF
+  // STATISTIK PROGRESS MINGGUAN USER AKTIF (Hanya Nominal Total)
   const userActivitiesThisWeek = activitiesThisWeek.filter(act => isMyPost(act.username));
 
   const statsPersonal = {
@@ -147,11 +138,11 @@ export default function FitPoinHome() {
   const leaderboard = Object.keys(rekapKlasemen).map(nama => {
     const userActs = dataForKlasemen.filter(act => act.username === nama);
 
-    // LOGIKA STREAK API: Dihitung per 1 Sesi Masuk tanpa dicicil (Pull Up jadi >= 10)
+    // LOGIKA STREAK API: Dihitung per 1 Sesi Masuk dgn tarikan <= 1
     let fireCount = 0;
-    if (userActs.some(a => a.activityType === 'Push Up' && Number(a.reps) >= 50)) fireCount++;
-    if (userActs.some(a => a.activityType === 'Sit Up' && Number(a.reps) >= 50)) fireCount++;
-    if (userActs.some(a => a.activityType === 'Pull Up' && Number(a.reps) >= 10)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Push Up' && Number(a.reps) >= 50 && Number(a.duration) <= 1)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Sit Up' && Number(a.reps) >= 50 && Number(a.duration) <= 1)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Pull Up' && Number(a.reps) >= 10 && Number(a.duration) <= 1)) fireCount++;
     if (userActs.some(a => a.activityType === 'Plank' && Number(a.duration) >= 1)) fireCount++;
     if (userActs.some(a => a.activityType === 'Lari' && Number(a.distance) >= 2.5 && Number(a.duration) <= 15)) fireCount++;
 
@@ -163,14 +154,21 @@ export default function FitPoinHome() {
     };
   }).sort((a, b) => b.totalXP - a.totalXP || b.totalSesi - a.totalSesi);
 
+  // PREDIKSI ESTIMASI XP DI FRONTEND
   const hitungEstimasiXP = () => {
     const dist = Number(form.distance || 0);
-    const dur = Number(form.duration || 0);
-    const rp = Number(form.reps || 0);
+    const tarikan = Number(form.duration || 0);
+    const nominal = Number(form.reps || 0);
 
-    if (form.activityType === 'Lari') return (dist * 50) + (dur * 5);
-    if (form.activityType === 'Plank') return dur * 15;
-    return (rp * 10) + (dur * 2);
+    if (form.activityType === 'Lari') return (dist * 50) + (tarikan * 5);
+    if (form.activityType === 'Plank') return tarikan * 15;
+    
+    // Logika Tarikan -> XP
+    let multiplier = 5;
+    if (tarikan <= 1) multiplier = 20;
+    else if (tarikan === 2) multiplier = 10;
+    
+    return (nominal * multiplier);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -180,9 +178,8 @@ export default function FitPoinHome() {
       return;
     }
 
-    // Catat angka sebelum di-submit untuk trigger deteksi selebrasi box full
-    const inputReps = Number(form.reps || 0);
-    const inputDuration = Number(form.duration || 0);
+    const inputNominal = Number(form.reps || 0);
+    const inputTarikan = Number(form.duration || 0);
     const inputDistance = Number(form.distance || 0);
     const type = form.activityType;
 
@@ -190,9 +187,9 @@ export default function FitPoinHome() {
       username: form.username,
       activityType: type,
       title: form.title,
-      duration: inputDuration,
+      duration: inputTarikan,
       distance: type === 'Lari' ? inputDistance : 0,
-      reps: ['Push Up', 'Sit Up', 'Pull Up'].includes(type) ? inputReps : 0
+      reps: ['Push Up', 'Sit Up', 'Pull Up'].includes(type) ? inputNominal : 0
     };
 
     try {
@@ -205,22 +202,20 @@ export default function FitPoinHome() {
       const result = await res.json();
 
       if (res.ok && result.success) {
-        // CEK APAKAH INPUTAN BARU INI MEMBUAT TARGET BOX JADI FULL TERISI
         let pesanSelebrasi = null;
 
-        if (type === 'Push Up' && statsPersonal.pushUp < 50 && (statsPersonal.pushUp + inputReps) >= 50) {
+        if (type === 'Push Up' && statsPersonal.pushUp < 50 && (statsPersonal.pushUp + inputNominal) >= 50) {
           pesanSelebrasi = "💪 SELEBRASI! Target Push Up 50/50 Selesai Terpenuhi!";
-        } else if (type === 'Sit Up' && statsPersonal.sitUp < 50 && (statsPersonal.sitUp + inputReps) >= 50) {
+        } else if (type === 'Sit Up' && statsPersonal.sitUp < 50 && (statsPersonal.sitUp + inputNominal) >= 50) {
           pesanSelebrasi = "🧘‍♂️ SELEBRASI! Target Sit Up 50/50 Selesai Terpenuhi!";
-        } else if (type === 'Pull Up' && statsPersonal.pullUp < 10 && (statsPersonal.pullUp + inputReps) >= 10) {
+        } else if (type === 'Pull Up' && statsPersonal.pullUp < 10 && (statsPersonal.pullUp + inputNominal) >= 10) {
           pesanSelebrasi = "🏋️‍♂️ SELEBRASI! Target Pull Up 10/10 Selesai Terpenuhi!";
-        } else if (type === 'Plank' && statsPersonal.plankMenit < 1 && (statsPersonal.plankMenit + inputDuration) >= 1) {
+        } else if (type === 'Plank' && statsPersonal.plankMenit < 1 && (statsPersonal.plankMenit + inputTarikan) >= 1) {
           pesanSelebrasi = "⚡ SELEBRASI! Target Plank 1 Menit Selesai Terpenuhi!";
-        } else if (type === 'Lari' && !statsPersonal.lariSempurna && inputDistance >= 2.5 && inputDuration <= 15) {
+        } else if (type === 'Lari' && !statsPersonal.lariSempurna && inputDistance >= 2.5 && inputTarikan <= 15) {
           pesanSelebrasi = "🏃‍♂️ SELEBRASI! Target Jarak Lari Sempurna Terpenuhi!";
         }
 
-        // Jika semua target mingguan jadi 5/5 berkat inputan ini
         const currentCheckboxesDone = 
           (statsPersonal.pushUp >= SYARAT.push ? 1 : 0) +
           (statsPersonal.sitUp >= SYARAT.sit ? 1 : 0) +
@@ -331,13 +326,13 @@ export default function FitPoinHome() {
         </div>
       </header>
 
-      {/* BOX CHECKLIST MINGGUAN DENGAN LABELS TOTAL REPS */}
+      {/* BOX CHECKLIST MINGGUAN */}
       <section className="max-w-5xl mx-auto bg-[#1e293b] border border-slate-700 rounded-xl p-5 mb-8 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h2 className="text-base font-bold text-slate-200 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-400" />
-              Target Perulangan & Repetisi Mingguan ({currentUser})
+              Target Perulangan Mingguan ({currentUser})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Skor akumulasi ini otomatis ter-reset setiap hari Senin jam 00:00.
@@ -393,7 +388,7 @@ export default function FitPoinHome() {
 
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* FORM INPUT LAMA YANG LU MAU (Tanpa Sistem Set x Reps) */}
+        {/* FORM INPUT DENGAN LABEL NOMINAL & TARIKAN */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -446,10 +441,10 @@ export default function FitPoinHome() {
                 </div>
               ) : ['Push Up', 'Sit Up', 'Pull Up'].includes(form.activityType) ? (
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1 font-medium">Jumlah (Reps)</label>
+                  <label className="block text-xs text-orange-400 mb-1 font-bold">Jumlah Nominal</label>
                   <input 
-                    type="number" required placeholder="0"
-                    className="w-full bg-[#0f172a] border border-slate-600 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
+                    type="number" required placeholder="Cth: 50"
+                    className="w-full bg-[#0f172a] border border-orange-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
                     value={form.reps} onChange={e => setForm({...form, reps: e.target.value})}
                   />
                 </div>
@@ -463,10 +458,12 @@ export default function FitPoinHome() {
               )}
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1 font-medium">Durasi (Menit)</label>
+                <label className="block text-xs text-orange-400 mb-1 font-bold">
+                  {form.activityType === 'Lari' || form.activityType === 'Plank' ? 'Durasi (Menit)' : 'Berapa Tarikan'}
+                </label>
                 <input 
-                  type="number" required placeholder="0"
-                  className="w-full bg-[#0f172a] border border-slate-600 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
+                  type="number" required placeholder={form.activityType === 'Lari' || form.activityType === 'Plank' ? "Menit" : "Cth: 1 (1x beres)"}
+                  className="w-full bg-[#0f172a] border border-orange-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-orange-500"
                   value={form.duration} onChange={e => setForm({...form, duration: e.target.value})}
                 />
               </div>
@@ -485,7 +482,7 @@ export default function FitPoinHome() {
           </form>
         </div>
 
-        {/* REKAP KLASEMEN (DITAMBAHIN BADGE LEVEL AJA) & TIMELINE */}
+        {/* REKAP KLASEMEN (DENGAN BADGE GAMIFIKASI) */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -573,12 +570,12 @@ export default function FitPoinHome() {
                 const isMeFeed = isMyPost(act.username);
 
                 const rp = Number(act.reps || 0);
-                const dur = Number(act.duration || 0);
+                const dur = Number(act.duration || 0); // Di sini act.duration = Tarikan
                 const dist = Number(act.distance || 0);
 
-                const isNoCicilPush = act.activityType === 'Push Up' && rp >= 50;
-                const isNoCicilSit = act.activityType === 'Sit Up' && rp >= 50;
-                const isNoCicilPull = act.activityType === 'Pull Up' && rp >= 10;
+                const isNoCicilPush = act.activityType === 'Push Up' && rp >= 50 && dur <= 1;
+                const isNoCicilSit = act.activityType === 'Sit Up' && rp >= 50 && dur <= 1;
+                const isNoCicilPull = act.activityType === 'Pull Up' && rp >= 10 && dur <= 1;
                 const isNoCicilPlank = act.activityType === 'Plank' && dur >= 1;
                 const isLariSempurna = act.activityType === 'Lari' && dist >= 2.5 && dur <= 15;
 
@@ -601,7 +598,7 @@ export default function FitPoinHome() {
                         </span>
                         
                         {isSavageMode && (
-                          <span className="bg-red-500/20 text-red-400 border border-green-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+                          <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
                             <span className="fire-icon text-xs">🔥</span> {act.activityType === 'Lari' ? 'SEMPURNA' : 'NO CICIL'}
                           </span>
                         )}
@@ -623,15 +620,19 @@ export default function FitPoinHome() {
                     <div className="grid grid-cols-3 gap-2 bg-[#0f172a] p-3 rounded-lg border border-slate-800 text-center mb-4">
                       <div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
-                          {act.activityType === 'Lari' ? 'Jarak' : act.activityType === 'Plank' ? 'Target' : 'Volume'}
+                          {act.activityType === 'Lari' ? 'Jarak' : act.activityType === 'Plank' ? 'Target' : 'Nominal'}
                         </div>
                         <div className="text-base font-black text-white">
                           {act.activityType === 'Lari' ? `${act.distance} KM` : act.activityType === 'Plank' ? 'Isometric' : `${act.reps || 0} Reps`}
                         </div>
                       </div>
                       <div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Waktu</div>
-                        <div className="text-base font-black text-white">{act.duration} <span className="text-xs font-normal text-slate-400">Min</span></div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                          {['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType) ? 'Tarikan' : 'Waktu'}
+                        </div>
+                        <div className="text-base font-black text-white">
+                          {act.duration} <span className="text-xs font-normal text-slate-400">{['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType) ? 'Kali' : 'Min'}</span>
+                        </div>
                       </div>
                       <div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Hadiah</div>

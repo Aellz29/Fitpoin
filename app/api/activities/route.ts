@@ -25,28 +25,25 @@ export async function POST(req: Request) {
     await connectMongoDB();
 
     let totalXP = 0;
-    const jumlahSet = Number(reps || 0);       // Input Form "Jumlah" (SET)
-    const jumlahReps = Number(duration || 0);   // Input Form "Waktu" (REPETISI/MENIT)
+    const nominal = Number(reps || 0);       // Input Form "Jumlah" (Nominal Reps)
+    const tarikan = Number(duration || 0);   // Input Form "Waktu" (Tarikan / Menit)
     const dist = Number(distance || 0);
 
     if (activityType === 'Lari') {
-      totalXP = (dist * 50) + (jumlahReps * 5);
+      totalXP = (dist * 50) + (tarikan * 5); // tarikan dipakai sebagai menit
     } else if (activityType === 'Plank') {
-      totalXP = jumlahReps * 15;
+      totalXP = tarikan * 15;                // tarikan dipakai sebagai menit
     } else {
-      // LOGIKA TERBALIK UNTUK PUSH UP, SIT UP, PULL UP
-      const baseXP = jumlahSet * jumlahReps;
-      let bonusBeban = 0;
-
-      if (jumlahReps >= 1 && jumlahReps <= 5) {
-        bonusBeban = jumlahSet * 150; // Bonus Reps Kecil (Beban Maksimal)
-      } else if (jumlahReps >= 6 && jumlahReps <= 10) {
-        bonusBeban = jumlahSet * 80;
-      } else if (jumlahReps >= 11 && jumlahReps <= 20) {
-        bonusBeban = jumlahSet * 30;
+      // LOGIKA XP TERBALIK: Makin sedikit tarikan, makin gede XP-nya!
+      let multiplier = 5; // Default kalau dicicil 3x atau lebih
+      
+      if (tarikan <= 1) {
+        multiplier = 20; // 1x Tarikan (Savage Mode)
+      } else if (tarikan === 2) {
+        multiplier = 10; // 2x Tarikan (Setengahnya)
       }
 
-      totalXP = baseXP + bonusBeban;
+      totalXP = nominal * multiplier;
     }
 
     const newActivity = await Activity.create({
@@ -54,8 +51,8 @@ export async function POST(req: Request) {
       activityType,
       title,
       distance: dist,
-      duration: jumlahReps, // Disimpan sebagai Repetisi/Menit
-      reps: jumlahSet,      // Disimpan sebagai Set
+      duration: tarikan, 
+      reps: nominal,      
       kudosCount: 0,
       earnedXP: totalXP
     });
