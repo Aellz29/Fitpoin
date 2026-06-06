@@ -18,10 +18,10 @@ interface ActivityItem {
 export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // State user & UI
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
-  
-  // STATE BARU: Untuk pindah tampilan klasemen (Mingguan vs Bulanan)
   const [klasemenView, setKlasemenView] = useState<'pekan' | 'bulan'>('pekan');
 
   const [form, setForm] = useState({
@@ -33,6 +33,7 @@ export default function FitPoinHome() {
     reps: ''
   });
 
+  // Load data awal dari Local Storage
   useEffect(() => {
     const savedName = localStorage.getItem('fitpoin_user');
     if (savedName) {
@@ -46,11 +47,13 @@ export default function FitPoinHome() {
     setLikedPosts(savedLikes);
   }, []);
 
+  // Validasi Kepemilikan Data yang Super Ketat
   const isMyPost = useCallback((name: string) => {
     if (!name || !currentUser) return false;
     return name.toLowerCase().trim() === currentUser.toLowerCase().trim();
   }, [currentUser]);
 
+  // Fetch API & Trik Reverse Engineering Reps
   const fetchFeed = useCallback(async () => {
     try {
       const res = await fetch('/api/activities');
@@ -78,7 +81,7 @@ export default function FitPoinHome() {
     fetchFeed();
   }, [fetchFeed]);
 
-  // FUNGSI WAKTU: Mendapatkan Hari Senin Minggu Ini & Tanggal 1 Bulan Ini
+  // PENGATURAN WAKTU (Mingguan & Bulanan)
   const getStartOfWeek = () => {
     const d = new Date();
     const day = d.getDay();
@@ -98,11 +101,10 @@ export default function FitPoinHome() {
   const startOfWeek = getStartOfWeek();
   const startOfMonth = getStartOfMonth();
 
-  // FILTER DATA BERDASARKAN WAKTU
   const activitiesThisWeek = activities.filter(act => new Date(act.createdAt).getTime() >= startOfWeek);
   const activitiesThisMonth = activities.filter(act => new Date(act.createdAt).getTime() >= startOfMonth);
 
-  // 1. PROGRESS BOX (STRICT MINGGU INI AJA BIAR RESET TIAP SENIN)
+  // 1. STATISTIK PERSONAL (Target Mingguan - Hanya ngitung aktivitas sendiri)
   const userActivitiesThisWeek = activitiesThisWeek.filter(act => isMyPost(act.username));
 
   const statsPersonal = {
@@ -114,7 +116,17 @@ export default function FitPoinHome() {
     lariBiasa: userActivitiesThisWeek.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
   };
 
-  // 2. LOGIKA KLASEMEN (BERDASARKAN TOGGLE MINGGU / BULAN)
+  const SYARAT = { push: 50, sit: 50, pull: 50, plank: 1 };
+  const checklistTerpenuhi = 
+    (statsPersonal.pushUp >= SYARAT.push ? 1 : 0) +
+    (statsPersonal.sitUp >= SYARAT.sit ? 1 : 0) +
+    (statsPersonal.pullUp >= SYARAT.pull ? 1 : 0) +
+    (statsPersonal.plankMenit >= SYARAT.plank ? 1 : 0) +
+    (statsPersonal.lariSempurna ? 1 : 0);
+
+  const persentaseProgress = Math.round((checklistTerpenuhi / 5) * 100);
+
+  // 2. LOGIKA KLASEMEN (Dinasmis toggle Pekan vs Bulan)
   const dataForKlasemen = klasemenView === 'pekan' ? activitiesThisWeek : activitiesThisMonth;
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
   
@@ -132,31 +144,18 @@ export default function FitPoinHome() {
     totalXP: rekapKlasemen[nama].totalXP
   })).sort((a, b) => b.totalSesi - a.totalSesi || b.totalXP - a.totalXP);
 
-  const SYARAT = { push: 50, sit: 50, pull: 50, plank: 1 };
-
-  const checklistTerpenuhi = 
-    (statsPersonal.pushUp >= SYARAT.push ? 1 : 0) +
-    (statsPersonal.sitUp >= SYARAT.sit ? 1 : 0) +
-    (statsPersonal.pullUp >= SYARAT.pull ? 1 : 0) +
-    (statsPersonal.plankMenit >= SYARAT.plank ? 1 : 0) +
-    (statsPersonal.lariSempurna ? 1 : 0);
-
-  const persentaseProgress = Math.round((checklistTerpenuhi / 5) * 100);
-
+  // ESTIMASI XP (Form)
   const hitungEstimasiXP = () => {
     const dist = Number(form.distance || 0);
     const dur = Number(form.duration || 0);
     const rp = Number(form.reps || 0);
 
-    if (form.activityType === 'Lari') {
-      return (dist * 50) + (dur * 5);
-    } else if (form.activityType === 'Plank') {
-      return dur * 15;
-    } else {
-      return (rp * 10) + (dur * 2);
-    }
+    if (form.activityType === 'Lari') return (dist * 50) + (dur * 5);
+    if (form.activityType === 'Plank') return dur * 15;
+    return (rp * 10) + (dur * 2);
   };
 
+  // HANDLERS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.username.trim()) {
@@ -232,6 +231,7 @@ export default function FitPoinHome() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white font-sans p-4 md:p-8">
+      {/* HEADER */}
       <header className="max-w-5xl mx-auto flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
         <h1 className="text-3xl font-black tracking-tight text-orange-500">
           FIT<span className="text-white font-light">POIN</span>
@@ -242,6 +242,7 @@ export default function FitPoinHome() {
         </div>
       </header>
 
+      {/* CHECKLIST TARGET */}
       <section className="max-w-5xl mx-auto bg-[#1e293b] border border-slate-700 rounded-xl p-5 mb-8 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
@@ -250,7 +251,7 @@ export default function FitPoinHome() {
               Checklist Target Fisik Mingguan ({currentUser})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Target ini akan otomatis ter-reset setiap hari Senin jam 00:00.
+              Target ini otomatis ter-reset setiap hari Senin jam 00:00.
             </p>
           </div>
           <div className="text-right">
@@ -302,6 +303,7 @@ export default function FitPoinHome() {
       </section>
 
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* KOLOM KIRI: FORM */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -393,6 +395,7 @@ export default function FitPoinHome() {
           </form>
         </div>
 
+        {/* KOLOM KANAN: KLASEMEN & TIMELINE */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -401,7 +404,7 @@ export default function FitPoinHome() {
                 <h2 className="text-lg font-bold text-slate-200">Klasemen Liga Latihan</h2>
               </div>
               
-              {/* TOMBOL TOGGLE PEKAN VS BULAN */}
+              {/* TOMBOL TOGGLE (Pekan vs Bulan) */}
               <div className="flex bg-[#0f172a] rounded-lg p-1 border border-slate-700">
                 <button 
                   onClick={() => setKlasemenView('pekan')}
@@ -485,6 +488,7 @@ export default function FitPoinHome() {
                             🎯 Sempurna
                           </span>
                         )}
+                        {/* TOMBOL TRASH DIKUNCI KHUSUS DEVICE PEMILIK */}
                         {isMeFeed && (
                           <button 
                             onClick={() => handleDeleteActivity(act._id)}
