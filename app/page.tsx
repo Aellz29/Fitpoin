@@ -201,7 +201,6 @@ export default function FitPoinHome() {
     }
   };
 
-  // FUNGSI BARU: TRIGGER HAPUS DATA KLASEMEN
   const handleDeleteActivity = async (id: string) => {
     const konfirmasi = confirm("Serius mau hapus sesi latihan ini dari liga, cuy?");
     if (!konfirmasi) return;
@@ -277,7 +276,7 @@ export default function FitPoinHome() {
           </div>
 
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.plankMenit >= SYARAT.plank ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Blank</span>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Plank</span>
             <div className="text-sm font-black mb-1">{statsPersonal.plankMenit} / {SYARAT.plank} Menit</div>
             <div className="flex justify-center">{statsPersonal.plankMenit >= SYARAT.plank ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
@@ -392,28 +391,31 @@ export default function FitPoinHome() {
             </div>
             
             <div className="divide-y divide-slate-800">
-              {leaderboard.map((user, index) => (
-                <div key={user.username} className={`flex items-center justify-between py-2.5 ${isUserTarget(user.username) ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
-                  <div className="flex items-center gap-3">
-                    <span className="w-5 text-center font-bold text-sm text-slate-400">
-                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
-                    </span>
-                    <span className={`text-sm font-bold ${isUserTarget(user.username) ? 'text-orange-400' : 'text-white'}`}>
-                      {user.username} {isUserTarget(user.username) && '(Lu)'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-6 text-right">
-                    <div>
-                      <span className="text-xs text-slate-400 block">Sesi</span>
-                      <span className="text-sm font-black text-white">{user.totalSesi} Sesi</span>
+              {leaderboard.map((user, index) => {
+                const isThisUserMe = user.username.toLowerCase() === currentUser.toLowerCase();
+                return (
+                  <div key={user.username} className={`flex items-center justify-between py-2.5 ${isThisUserMe ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="w-5 text-center font-bold text-sm text-slate-400">
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
+                      </span>
+                      <span className={`text-sm font-bold ${isThisUserMe ? 'text-orange-400' : 'text-white'}`}>
+                        {user.username} {isThisUserMe && '(Lu)'}
+                      </span>
                     </div>
-                    <div className="w-20">
-                      <span className="text-xs text-slate-400 block">Poin</span>
-                      <span className="text-sm font-black text-green-400">+{user.totalXP} XP</span>
+                    <div className="flex items-center gap-6 text-right">
+                      <div>
+                        <span className="text-xs text-slate-400 block">Sesi</span>
+                        <span className="text-sm font-black text-white">{user.totalSesi} Sesi</span>
+                      </div>
+                      <div className="w-20">
+                        <span className="text-xs text-slate-400 block">Poin</span>
+                        <span className="text-sm font-black text-green-400">+{user.totalXP} XP</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -430,15 +432,16 @@ export default function FitPoinHome() {
                 const isUserLariSempurna = act.activityType === 'Lari' && act.distance >= 2.5 && act.duration <= 15;
                 const isLiked = likedPosts.includes(act._id);
                 
-                // KOREKSI UTAMA: Menggunakan fungsi isUserTarget biar aman dari typo huruf kapital
-                const isMyPost = isUserTarget(act.username);
-                
+                // PERBAIKAN MUTLAK: Tombol hapus hanya muncul jika nama pembuat postingan SAMA PERSIS dengan nama yang login di device itu
+                const isMyPost = act.username.toLowerCase() === currentUser.toLowerCase();
+                const showLuTag = isUserTarget(act.username);
+
                 return (
                   <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h3 className={`font-bold text-sm ${isUserTarget(act.username) ? 'text-orange-400' : 'text-blue-400'}`}>
-                          {act.username} {isUserTarget(act.username) && '(Lu)'}
+                        <h3 className={`font-bold text-sm ${showLuTag ? 'text-orange-400' : 'text-blue-400'}`}>
+                          {act.username} {showLuTag && '(Lu)'}
                         </h3>
                         <span className="text-[11px] text-slate-400">
                           {new Date(act.createdAt).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}
@@ -453,7 +456,7 @@ export default function FitPoinHome() {
                             🎯 Sempurna
                           </span>
                         )}
-                        {/* TOMBOL TRASH AKAN SELALU MUNCUL SEKARANG DI POSTINGAN LU */}
+                        {/* TOMBOL TRASH SEKARANG DIKUNCI HANYA UNTUK PEMBUAT ASLINYA */}
                         {isMyPost && (
                           <button 
                             onClick={() => handleDeleteActivity(act._id)}
