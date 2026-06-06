@@ -19,10 +19,9 @@ export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // State untuk nama user yang lagi aktif (biar checklist dinamis)
+  // State untuk nama user yang lagi aktif di device ini
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
   
-  // State untuk menyimpan ID postingan yang udah di-like
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
 
   const [form, setForm] = useState({
@@ -34,7 +33,7 @@ export default function FitPoinHome() {
     reps: ''
   });
 
-  // Fitur Login Instan & Load Jempol dari localStorage saat web pertama dibuka
+  // Load data dari local device
   useEffect(() => {
     const savedName = localStorage.getItem('fitpoin_user');
     if (savedName) {
@@ -48,18 +47,18 @@ export default function FitPoinHome() {
     setLikedPosts(savedLikes);
   }, []);
 
-  const isUserTarget = (name: string) => {
-    if (!name) return false;
-    const n = name.toLowerCase();
-    return n.includes('ail') || n.includes('ailum');
-  };
+  // PERBAIKAN MUTLAK: Pengecekan dinamis milik siapa postingan ini (Anti kecampur sama Rafa)
+  const isMyPost = useCallback((name: string) => {
+    if (!name || !currentUser) return false;
+    return name.toLowerCase().trim() === currentUser.toLowerCase().trim();
+  }, [currentUser]);
 
   const fetchFeed = useCallback(async () => {
     try {
       const res = await fetch('/api/activities');
       const result = await res.json();
       if (result.success) {
-        // Trik reverse engineering dari sesi sebelumnya agar reps aman
+        // Trik reverse engineering biar reps yang kebuang sama DB balik lagi
         const fixedData = result.data.map((act: ActivityItem) => {
           let rp = Number(act.reps || 0);
           if (rp === 0 && ['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType)) {
@@ -85,8 +84,8 @@ export default function FitPoinHome() {
     loadData().catch(console.error);
   }, [fetchFeed]);
 
-  // 1. HITUNG PROGRESS DETAIL PERSONAL SECARA DINAMIS (Anti Nyangkut & Bisa Dicicil)
-  const userActivities = activities.filter(act => isUserTarget(act.username));
+  // PROGRESS BOX SEKARANG MURNI MILIK DEVICE MASING-MASING
+  const userActivities = activities.filter(act => isMyPost(act.username));
 
   const statsPersonal = {
     pushUp: userActivities.filter(a => a.activityType === 'Push Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
@@ -97,7 +96,6 @@ export default function FitPoinHome() {
     lariBiasa: userActivities.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
   };
 
-  // 2. LOGIKA KLASEMEN PERLOMBAAN SECARA DINAMIS
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
   activities.forEach(act => {
     if (!rekapKlasemen[act.username]) {
@@ -392,15 +390,15 @@ export default function FitPoinHome() {
             
             <div className="divide-y divide-slate-800">
               {leaderboard.map((user, index) => {
-                const isThisUserMe = user.username.toLowerCase() === currentUser.toLowerCase();
+                const isMeKlasemen = isMyPost(user.username);
                 return (
-                  <div key={user.username} className={`flex items-center justify-between py-2.5 ${isThisUserMe ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
+                  <div key={user.username} className={`flex items-center justify-between py-2.5 ${isMeKlasemen ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
                     <div className="flex items-center gap-3">
                       <span className="w-5 text-center font-bold text-sm text-slate-400">
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
                       </span>
-                      <span className={`text-sm font-bold ${isThisUserMe ? 'text-orange-400' : 'text-white'}`}>
-                        {user.username} {isThisUserMe && '(Lu)'}
+                      <span className={`text-sm font-bold ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
+                        {user.username} {isMeKlasemen && '(Lu)'}
                       </span>
                     </div>
                     <div className="flex items-center gap-6 text-right">
@@ -432,16 +430,15 @@ export default function FitPoinHome() {
                 const isUserLariSempurna = act.activityType === 'Lari' && act.distance >= 2.5 && act.duration <= 15;
                 const isLiked = likedPosts.includes(act._id);
                 
-                // PERBAIKAN MUTLAK: Tombol hapus hanya muncul jika nama pembuat postingan SAMA PERSIS dengan nama yang login di device itu
-                const isMyPost = act.username.toLowerCase() === currentUser.toLowerCase();
-                const showLuTag = isUserTarget(act.username);
+                // MENGGUNAKAN FUNGSI BARU YANG BENAR
+                const isMeFeed = isMyPost(act.username);
 
                 return (
                   <div key={act._id} className="bg-[#1e293b] p-5 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h3 className={`font-bold text-sm ${showLuTag ? 'text-orange-400' : 'text-blue-400'}`}>
-                          {act.username} {showLuTag && '(Lu)'}
+                        <h3 className={`font-bold text-sm ${isMeFeed ? 'text-orange-400' : 'text-blue-400'}`}>
+                          {act.username} {isMeFeed && '(Lu)'}
                         </h3>
                         <span className="text-[11px] text-slate-400">
                           {new Date(act.createdAt).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}
@@ -456,12 +453,12 @@ export default function FitPoinHome() {
                             🎯 Sempurna
                           </span>
                         )}
-                        {/* TOMBOL TRASH SEKARANG DIKUNCI HANYA UNTUK PEMBUAT ASLINYA */}
-                        {isMyPost && (
+                        {/* TOMBOL TRASH DIKUNCI HANYA UNTUK DEVICE PEMBUAT */}
+                        {isMeFeed && (
                           <button 
                             onClick={() => handleDeleteActivity(act._id)}
                             className="text-slate-400 hover:text-red-500 p-1 rounded-md bg-slate-800/50 hover:bg-red-500/10 border border-slate-700/50 transition-all ml-1"
-                            title="Hapus Sesi Salah Input"
+                            title="Hapus Sesi Latihan"
                           >
                             <Trash2 size={15} />
                           </button>
