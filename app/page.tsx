@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusCircle, Flame, Dumbbell, Award, ThumbsUp, CheckCircle, Trophy, Check, X, Trash2 } from 'lucide-react';
+import { PlusCircle, Flame, Dumbbell, Award, ThumbsUp, CheckCircle, Trophy, Check, X, Trash2, CalendarDays } from 'lucide-react';
 
 interface ActivityItem {
   _id: string;
@@ -18,11 +18,11 @@ interface ActivityItem {
 export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // State untuk nama user yang lagi aktif di device ini
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
-  
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
+  
+  // STATE BARU: Untuk pindah tampilan klasemen (Mingguan vs Bulanan)
+  const [klasemenView, setKlasemenView] = useState<'pekan' | 'bulan'>('pekan');
 
   const [form, setForm] = useState({
     username: '', 
@@ -33,7 +33,6 @@ export default function FitPoinHome() {
     reps: ''
   });
 
-  // Load data dari local device
   useEffect(() => {
     const savedName = localStorage.getItem('fitpoin_user');
     if (savedName) {
@@ -47,7 +46,6 @@ export default function FitPoinHome() {
     setLikedPosts(savedLikes);
   }, []);
 
-  // PERBAIKAN MUTLAK: Pengecekan dinamis milik siapa postingan ini (Anti kecampur sama Rafa)
   const isMyPost = useCallback((name: string) => {
     if (!name || !currentUser) return false;
     return name.toLowerCase().trim() === currentUser.toLowerCase().trim();
@@ -58,7 +56,6 @@ export default function FitPoinHome() {
       const res = await fetch('/api/activities');
       const result = await res.json();
       if (result.success) {
-        // Trik reverse engineering biar reps yang kebuang sama DB balik lagi
         const fixedData = result.data.map((act: ActivityItem) => {
           let rp = Number(act.reps || 0);
           if (rp === 0 && ['Push Up', 'Sit Up', 'Pull Up'].includes(act.activityType)) {
@@ -78,26 +75,50 @@ export default function FitPoinHome() {
   }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchFeed();
-    };
-    loadData().catch(console.error);
+    fetchFeed();
   }, [fetchFeed]);
 
-  // PROGRESS BOX SEKARANG MURNI MILIK DEVICE MASING-MASING
-  const userActivities = activities.filter(act => isMyPost(act.username));
-
-  const statsPersonal = {
-    pushUp: userActivities.filter(a => a.activityType === 'Push Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
-    sitUp: userActivities.filter(a => a.activityType === 'Sit Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
-    pullUp: userActivities.filter(a => a.activityType === 'Pull Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
-    plankMenit: userActivities.filter(a => a.activityType === 'Plank').reduce((sum, a) => sum + Number(a.duration || 0), 0),
-    lariSempurna: userActivities.some(a => a.activityType === 'Lari' && Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15),
-    lariBiasa: userActivities.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
+  // FUNGSI WAKTU: Mendapatkan Hari Senin Minggu Ini & Tanggal 1 Bulan Ini
+  const getStartOfWeek = () => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Mundur ke hari Senin
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
   };
 
+  const getStartOfMonth = () => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+
+  const startOfWeek = getStartOfWeek();
+  const startOfMonth = getStartOfMonth();
+
+  // FILTER DATA BERDASARKAN WAKTU
+  const activitiesThisWeek = activities.filter(act => new Date(act.createdAt).getTime() >= startOfWeek);
+  const activitiesThisMonth = activities.filter(act => new Date(act.createdAt).getTime() >= startOfMonth);
+
+  // 1. PROGRESS BOX (STRICT MINGGU INI AJA BIAR RESET TIAP SENIN)
+  const userActivitiesThisWeek = activitiesThisWeek.filter(act => isMyPost(act.username));
+
+  const statsPersonal = {
+    pushUp: userActivitiesThisWeek.filter(a => a.activityType === 'Push Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
+    sitUp: userActivitiesThisWeek.filter(a => a.activityType === 'Sit Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
+    pullUp: userActivitiesThisWeek.filter(a => a.activityType === 'Pull Up').reduce((sum, a) => sum + Number(a.reps || 0), 0),
+    plankMenit: userActivitiesThisWeek.filter(a => a.activityType === 'Plank').reduce((sum, a) => sum + Number(a.duration || 0), 0),
+    lariSempurna: userActivitiesThisWeek.some(a => a.activityType === 'Lari' && Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15),
+    lariBiasa: userActivitiesThisWeek.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
+  };
+
+  // 2. LOGIKA KLASEMEN (BERDASARKAN TOGGLE MINGGU / BULAN)
+  const dataForKlasemen = klasemenView === 'pekan' ? activitiesThisWeek : activitiesThisMonth;
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number } } = {};
-  activities.forEach(act => {
+  
+  dataForKlasemen.forEach(act => {
     if (!rekapKlasemen[act.username]) {
       rekapKlasemen[act.username] = { totalSesi: 0, totalXP: 0 };
     }
@@ -163,10 +184,8 @@ export default function FitPoinHome() {
 
       if (res.ok && result.success) {
         alert(result.message);
-        
         localStorage.setItem('fitpoin_user', form.username);
         setCurrentUser(form.username); 
-        
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
         setTimeout(() => { fetchFeed(); }, 500);
       } else {
@@ -181,9 +200,7 @@ export default function FitPoinHome() {
     if (likedPosts.includes(id)) {
       return alert('Sabar cuy, lu udah ngasih jempol ke aktivitas ini!');
     }
-
     setActivities(prev => prev.map(act => act._id === id ? { ...act, kudosCount: currentKudos + 1 } : act));
-    
     const newLikes = [...likedPosts, id];
     setLikedPosts(newLikes);
     localStorage.setItem('fitpoin_likes', JSON.stringify(newLikes));
@@ -202,17 +219,12 @@ export default function FitPoinHome() {
   const handleDeleteActivity = async (id: string) => {
     const konfirmasi = confirm("Serius mau hapus sesi latihan ini dari liga, cuy?");
     if (!konfirmasi) return;
-
     setActivities(prev => prev.filter(act => act._id !== id));
-
     try {
       const res = await fetch(`/api/activities?id=${id}`, { method: 'DELETE' });
       const result = await res.json();
-      if (result.success) {
-        await fetchFeed();
-      } else {
-        alert(result.message);
-      }
+      if (result.success) await fetchFeed();
+      else alert(result.message);
     } catch (error) {
       console.error('Gagal menghapus aktivitas:', error);
     }
@@ -238,7 +250,7 @@ export default function FitPoinHome() {
               Checklist Target Fisik Mingguan ({currentUser})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Ketahui item latihan yang belum lu penuhi untuk mencapai kondisi fisik sempurna pekan ini.
+              Target ini akan otomatis ter-reset setiap hari Senin jam 00:00.
             </p>
           </div>
           <div className="text-right">
@@ -383,37 +395,59 @@ export default function FitPoinHome() {
 
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
-            <div className="flex items-center gap-2 mb-4">
-              <Trophy className="w-5 h-5 text-yellow-400" />
-              <h2 className="text-lg font-bold text-slate-200">Klasemen Liga Latihan Pekan Ini</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-yellow-400" />
+                <h2 className="text-lg font-bold text-slate-200">Klasemen Liga Latihan</h2>
+              </div>
+              
+              {/* TOMBOL TOGGLE PEKAN VS BULAN */}
+              <div className="flex bg-[#0f172a] rounded-lg p-1 border border-slate-700">
+                <button 
+                  onClick={() => setKlasemenView('pekan')}
+                  className={`text-xs px-3 py-1.5 rounded-md font-bold transition-all ${klasemenView === 'pekan' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  Pekan Ini
+                </button>
+                <button 
+                  onClick={() => setKlasemenView('bulan')}
+                  className={`text-xs px-3 py-1.5 rounded-md font-bold transition-all flex items-center gap-1 ${klasemenView === 'bulan' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  <CalendarDays size={12} /> Bulan Ini
+                </button>
+              </div>
             </div>
             
             <div className="divide-y divide-slate-800">
-              {leaderboard.map((user, index) => {
-                const isMeKlasemen = isMyPost(user.username);
-                return (
-                  <div key={user.username} className={`flex items-center justify-between py-2.5 ${isMeKlasemen ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <span className="w-5 text-center font-bold text-sm text-slate-400">
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
-                      </span>
-                      <span className={`text-sm font-bold ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
-                        {user.username} {isMeKlasemen && '(Lu)'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-6 text-right">
-                      <div>
-                        <span className="text-xs text-slate-400 block">Sesi</span>
-                        <span className="text-sm font-black text-white">{user.totalSesi} Sesi</span>
+              {leaderboard.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">Belum ada aktivitas di periode ini. Gaskeun cuy!</p>
+              ) : (
+                leaderboard.map((user, index) => {
+                  const isMeKlasemen = isMyPost(user.username);
+                  return (
+                    <div key={user.username} className={`flex items-center justify-between py-2.5 ${isMeKlasemen ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
+                      <div className="flex items-center gap-3">
+                        <span className="w-5 text-center font-bold text-sm text-slate-400">
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
+                        </span>
+                        <span className={`text-sm font-bold ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
+                          {user.username} {isMeKlasemen && '(Lu)'}
+                        </span>
                       </div>
-                      <div className="w-20">
-                        <span className="text-xs text-slate-400 block">Poin</span>
-                        <span className="text-sm font-black text-green-400">+{user.totalXP} XP</span>
+                      <div className="flex items-center gap-6 text-right">
+                        <div>
+                          <span className="text-xs text-slate-400 block">Sesi</span>
+                          <span className="text-sm font-black text-white">{user.totalSesi} Sesi</span>
+                        </div>
+                        <div className="w-20">
+                          <span className="text-xs text-slate-400 block">Poin</span>
+                          <span className="text-sm font-black text-green-400">+{user.totalXP} XP</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -429,8 +463,6 @@ export default function FitPoinHome() {
               activities.map((act) => {
                 const isUserLariSempurna = act.activityType === 'Lari' && act.distance >= 2.5 && act.duration <= 15;
                 const isLiked = likedPosts.includes(act._id);
-                
-                // MENGGUNAKAN FUNGSI BARU YANG BENAR
                 const isMeFeed = isMyPost(act.username);
 
                 return (
@@ -453,7 +485,6 @@ export default function FitPoinHome() {
                             🎯 Sempurna
                           </span>
                         )}
-                        {/* TOMBOL TRASH DIKUNCI HANYA UNTUK DEVICE PEMBUAT */}
                         {isMeFeed && (
                           <button 
                             onClick={() => handleDeleteActivity(act._id)}
