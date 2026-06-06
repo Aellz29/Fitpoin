@@ -22,6 +22,9 @@ export default function FitPoinHome() {
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
   const [klasemenView, setKlasemenView] = useState<'pekan' | 'bulan'>('pekan');
+  
+  // STATE BARU: Untuk Notifikasi Perayaan Visual
+  const [celebration, setCelebration] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     username: '', 
@@ -136,7 +139,7 @@ export default function FitPoinHome() {
   const leaderboard = Object.keys(rekapKlasemen).map(nama => {
     const userActs = dataForKlasemen.filter(act => act.username === nama);
 
-    // HITUNG BERAPA LATIHAN YANG BERES TANPA CICIL!
+    // HITUNG BERAPA LATIHAN YANG BERES TANPA CICIL (FIRE STREAK)
     let fireCount = 0;
     if (userActs.some(a => a.activityType === 'Push Up' && Number(a.reps) >= 50)) fireCount++;
     if (userActs.some(a => a.activityType === 'Sit Up' && Number(a.reps) >= 50)) fireCount++;
@@ -169,6 +172,9 @@ export default function FitPoinHome() {
       return;
     }
     
+    // Simpan progres sebelum submit untuk deteksi perayaan
+    const oldProgress = checklistTerpenuhi;
+
     const payload = {
       username: form.username,
       activityType: form.activityType,
@@ -188,10 +194,39 @@ export default function FitPoinHome() {
       const result = await res.json();
 
       if (res.ok && result.success) {
-        alert(result.message);
+        
+        // Cek instan apakah progress bertambah setelah submit ini
+        const newStats = { ...statsPersonal };
+        if (payload.activityType === 'Push Up') newStats.pushUp += payload.reps;
+        if (payload.activityType === 'Sit Up') newStats.sitUp += payload.reps;
+        if (payload.activityType === 'Pull Up') newStats.pullUp += payload.reps;
+        if (payload.activityType === 'Plank') newStats.plankMenit += payload.duration;
+        if (payload.activityType === 'Lari' && payload.distance >= 2.5 && payload.duration <= 15) newStats.lariSempurna = true;
+
+        const newProgress = 
+          (newStats.pushUp >= SYARAT.push ? 1 : 0) +
+          (newStats.sitUp >= SYARAT.sit ? 1 : 0) +
+          (newStats.pullUp >= SYARAT.pull ? 1 : 0) +
+          (newStats.plankMenit >= SYARAT.plank ? 1 : 0) +
+          (newStats.lariSempurna ? 1 : 0);
+
+        // LOGIKA PERAYAAN VISUAL
+        if (newProgress > oldProgress) {
+          if (newProgress === 5) {
+            setCelebration("🏆 GOKIL! Target Sempurna Pekan Ini!");
+          } else {
+            setCelebration("🔥 Mantap! Ada Target Yang Tembus!");
+          }
+          // Hilangkan perayaan setelah 4 detik
+          setTimeout(() => setCelebration(null), 4000);
+        } else {
+          alert(result.message);
+        }
+
         localStorage.setItem('fitpoin_user', form.username);
         setCurrentUser(form.username); 
         setForm({ ...form, title: '', distance: '', duration: '', reps: '' });
+        
         setTimeout(() => { fetchFeed(); }, 500);
       } else {
         alert(result.message || 'Gagal menyimpan aktivitas');
@@ -249,7 +284,30 @@ export default function FitPoinHome() {
           animation: burn 0.8s infinite ease-in-out; 
           display: inline-block; 
         }
+        @keyframes pop {
+          0% { transform: scale(0.8); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .celebration-box {
+          animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
       `}} />
+
+      {/* OVERLAY NOTIFIKASI VISUAL SELEBRASI */}
+      {celebration && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+           <div className="celebration-box bg-[#1e293b] p-8 rounded-2xl border-4 border-orange-500 shadow-[0_0_50px_rgba(249,115,22,0.5)] text-center max-w-sm mx-4">
+              <span className="text-7xl mb-4 block animate-bounce">🔥</span>
+              <h2 className="text-2xl font-black text-white">{celebration}</h2>
+              <button 
+                onClick={() => setCelebration(null)} 
+                className="mt-6 w-full bg-orange-600 hover:bg-orange-500 transition-colors px-6 py-3 rounded-lg font-bold shadow-lg"
+              >
+                Lanjut Tarung!
+              </button>
+           </div>
+        </div>
+      )}
 
       <header className="max-w-5xl mx-auto flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
         <h1 className="text-3xl font-black tracking-tight text-orange-500">
@@ -492,7 +550,6 @@ export default function FitPoinHome() {
                 const isLiked = likedPosts.includes(act._id);
                 const isMeFeed = isMyPost(act.username);
 
-                // CEK APAKAH INI AKTIVITAS "NO CICIL" / "SEMPURNA"
                 const rp = Number(act.reps || 0);
                 const dur = Number(act.duration || 0);
                 const dist = Number(act.distance || 0);
@@ -521,7 +578,6 @@ export default function FitPoinHome() {
                           <Dumbbell className="w-3 h-3 text-orange-400" /> {act.activityType}
                         </span>
                         
-                        {/* BADGE API MEMBARA DI LINIMASA */}
                         {isSavageMode && (
                           <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
                             <span className="fire-icon text-xs">🔥</span> {act.activityType === 'Lari' ? 'SEMPURNA' : 'NO CICIL'}
