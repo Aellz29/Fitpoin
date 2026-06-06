@@ -18,23 +18,35 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { username, activityType, title, distance, duration, reps } = body;
 
-    if (!username || !activityType || !title || !duration) {
+    if (!username || !activityType || !title) {
       return NextResponse.json({ success: false, message: 'Mohon isi semua field wajib!' }, { status: 400 });
     }
 
     await connectMongoDB();
 
     let totalXP = 0;
+    const jumlahSet = Number(reps || 0);       // Input Form "Jumlah" (SET)
+    const jumlahReps = Number(duration || 0);   // Input Form "Waktu" (REPETISI/MENIT)
     const dist = Number(distance || 0);
-    const dur = Number(duration || 0);
-    const rp = Number(reps || 0);
 
     if (activityType === 'Lari') {
-      totalXP = (dist * 50) + (dur * 5);
+      totalXP = (dist * 50) + (jumlahReps * 5);
     } else if (activityType === 'Plank') {
-      totalXP = dur * 15;
+      totalXP = jumlahReps * 15;
     } else {
-      totalXP = (rp * 10) + (dur * 2);
+      // LOGIKA TERBALIK UNTUK PUSH UP, SIT UP, PULL UP
+      const baseXP = jumlahSet * jumlahReps;
+      let bonusBeban = 0;
+
+      if (jumlahReps >= 1 && jumlahReps <= 5) {
+        bonusBeban = jumlahSet * 150; // Bonus Reps Kecil (Beban Maksimal)
+      } else if (jumlahReps >= 6 && jumlahReps <= 10) {
+        bonusBeban = jumlahSet * 80;
+      } else if (jumlahReps >= 11 && jumlahReps <= 20) {
+        bonusBeban = jumlahSet * 30;
+      }
+
+      totalXP = baseXP + bonusBeban;
     }
 
     const newActivity = await Activity.create({
@@ -42,8 +54,8 @@ export async function POST(req: Request) {
       activityType,
       title,
       distance: dist,
-      duration: dur,
-      reps: ['Push Up', 'Sit Up', 'Pull Up'].includes(activityType) ? rp : 0,
+      duration: jumlahReps, // Disimpan sebagai Repetisi/Menit
+      reps: jumlahSet,      // Disimpan sebagai Set
       kudosCount: 0,
       earnedXP: totalXP
     });
@@ -84,7 +96,6 @@ export async function PUT(req: Request) {
   }
 }
 
-// FUNGSI BARU: HAPUS AKTIVITAS
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);

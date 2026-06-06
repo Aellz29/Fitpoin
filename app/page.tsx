@@ -125,6 +125,13 @@ export default function FitPoinHome() {
 
   const persentaseProgress = Math.round((checklistTerpenuhi / 5) * 100);
 
+  // LOGIKA LEVELING BERDASARKAN XP (GAMIFIKASI)
+  const getBadgeLevel = (xp: number) => {
+    if (xp < 500) return { label: 'Newbie', icon: '🌱', styling: 'text-green-400 bg-green-500/10 border-green-500/20' };
+    if (xp < 2000) return { label: 'Athlete', icon: '🏃‍♂️', styling: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+    return { label: 'Beast Mode', icon: '🦍', styling: 'text-red-400 bg-red-500/10 border-red-500/30 font-black' };
+  };
+
   // KLASEMEN & FIRE STREAK LOGIC
   const dataForKlasemen = klasemenView === 'pekan' ? activitiesThisWeek : activitiesThisMonth;
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number; } } = {};
@@ -386,7 +393,7 @@ export default function FitPoinHome() {
 
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* FORM INPUT BARU */}
+        {/* FORM INPUT LAMA YANG LU MAU (Tanpa Sistem Set x Reps) */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -478,7 +485,7 @@ export default function FitPoinHome() {
           </form>
         </div>
 
-        {/* REKAP KLASEMEN & TIMELINE */}
+        {/* REKAP KLASEMEN (DITAMBAHIN BADGE LEVEL AJA) & TIMELINE */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -509,23 +516,31 @@ export default function FitPoinHome() {
               ) : (
                 leaderboard.map((user, index) => {
                   const isMeKlasemen = isMyPost(user.username);
+                  const badge = getBadgeLevel(user.totalXP); // LOGIKA LEVEL GAMIFIKASI
+                  
                   return (
-                    <div key={user.username} className={`flex items-center justify-between py-2.5 ${isMeKlasemen ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
+                    <div key={user.username} className={`flex items-center justify-between py-3 ${isMeKlasemen ? 'bg-orange-500/10 px-2 rounded-lg border border-orange-500/20' : ''}`}>
                       <div className="flex items-center gap-3">
                         <span className="w-5 text-center font-bold text-sm text-slate-400">
                           {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
                         </span>
                         
-                        <span className={`text-sm font-bold flex items-center gap-1 ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
-                          {user.username} {isMeKlasemen && '(Lu)'}
-                          {user.fireCount > 0 && (
-                            <span className="flex gap-0.5 ml-1">
-                              {[...Array(user.fireCount)].map((_, i) => (
-                                <span key={i} className="fire-icon text-base" style={{ animationDelay: `${i * 0.15}s` }}>🔥</span>
-                              ))}
-                            </span>
-                          )}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-bold flex items-center gap-1 ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
+                            {user.username} {isMeKlasemen && '(Lu)'}
+                            {user.fireCount > 0 && (
+                              <span className="flex gap-0.5 ml-1">
+                                {[...Array(user.fireCount)].map((_, i) => (
+                                  <span key={i} className="fire-icon text-base" style={{ animationDelay: `${i * 0.15}s` }}>🔥</span>
+                                ))}
+                              </span>
+                            )}
+                          </span>
+                          {/* BADGE LEVEL DITAMPILKAN DI BAWAH NAMA */}
+                          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border mt-1 inline-block w-max ${badge.styling}`}>
+                            {badge.icon} {badge.label}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-6 text-right">
                         <div>
