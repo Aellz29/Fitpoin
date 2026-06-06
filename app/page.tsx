@@ -18,13 +18,15 @@ interface ActivityItem {
 export default function FitPoinHome() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  
   const [currentUser, setCurrentUser] = useState('Ailum Mukhlish');
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
   const [klasemenView, setKlasemenView] = useState<'pekan' | 'bulan'>('pekan');
   
-  // STATE BARU: Untuk Notifikasi Perayaan Visual
+  // State untuk Pop-Up Selebrasi Visual
   const [celebration, setCelebration] = useState<string | null>(null);
+
+  // KETENTUAN TARGET BARU (Pull Up cukup 10)
+  const SYARAT = { push: 50, sit: 50, pull: 10, plank: 1 };
 
   const [form, setForm] = useState({
     username: '', 
@@ -102,7 +104,7 @@ export default function FitPoinHome() {
   const activitiesThisWeek = activities.filter(act => new Date(act.createdAt).getTime() >= startOfWeek);
   const activitiesThisMonth = activities.filter(act => new Date(act.createdAt).getTime() >= startOfMonth);
 
-  // 1. STATISTIK PERSONAL MINGGU INI
+  // STATISTIK PROGRESS MINGGUAN USER AKTIF
   const userActivitiesThisWeek = activitiesThisWeek.filter(act => isMyPost(act.username));
 
   const statsPersonal = {
@@ -114,7 +116,6 @@ export default function FitPoinHome() {
     lariBiasa: userActivitiesThisWeek.filter(a => a.activityType === 'Lari' && !(Number(a.distance || 0) >= 2.5 && Number(a.duration || 0) <= 15)).length
   };
 
-  const SYARAT = { push: 50, sit: 50, pull: 50, plank: 1 };
   const checklistTerpenuhi = 
     (statsPersonal.pushUp >= SYARAT.push ? 1 : 0) +
     (statsPersonal.sitUp >= SYARAT.sit ? 1 : 0) +
@@ -124,7 +125,7 @@ export default function FitPoinHome() {
 
   const persentaseProgress = Math.round((checklistTerpenuhi / 5) * 100);
 
-  // 2. LOGIKA KLASEMEN & FIRE STREAK
+  // KLASEMEN & FIRE STREAK LOGIC
   const dataForKlasemen = klasemenView === 'pekan' ? activitiesThisWeek : activitiesThisMonth;
   const rekapKlasemen: { [key: string]: { totalSesi: number; totalXP: number; } } = {};
   
@@ -139,11 +140,11 @@ export default function FitPoinHome() {
   const leaderboard = Object.keys(rekapKlasemen).map(nama => {
     const userActs = dataForKlasemen.filter(act => act.username === nama);
 
-    // HITUNG BERAPA LATIHAN YANG BERES TANPA CICIL (FIRE STREAK)
+    // LOGIKA STREAK API: Dihitung per 1 Sesi Masuk tanpa dicicil (Pull Up jadi >= 10)
     let fireCount = 0;
     if (userActs.some(a => a.activityType === 'Push Up' && Number(a.reps) >= 50)) fireCount++;
     if (userActs.some(a => a.activityType === 'Sit Up' && Number(a.reps) >= 50)) fireCount++;
-    if (userActs.some(a => a.activityType === 'Pull Up' && Number(a.reps) >= 50)) fireCount++;
+    if (userActs.some(a => a.activityType === 'Pull Up' && Number(a.reps) >= 10)) fireCount++;
     if (userActs.some(a => a.activityType === 'Plank' && Number(a.duration) >= 1)) fireCount++;
     if (userActs.some(a => a.activityType === 'Lari' && Number(a.distance) >= 2.5 && Number(a.duration) <= 15)) fireCount++;
 
@@ -171,17 +172,20 @@ export default function FitPoinHome() {
       alert('Nama wajib diisi ya cuy!');
       return;
     }
-    
-    // Simpan progres sebelum submit untuk deteksi perayaan
-    const oldProgress = checklistTerpenuhi;
+
+    // Catat angka sebelum di-submit untuk trigger deteksi selebrasi box full
+    const inputReps = Number(form.reps || 0);
+    const inputDuration = Number(form.duration || 0);
+    const inputDistance = Number(form.distance || 0);
+    const type = form.activityType;
 
     const payload = {
       username: form.username,
-      activityType: form.activityType,
+      activityType: type,
       title: form.title,
-      duration: Number(form.duration || 0),
-      distance: form.activityType === 'Lari' ? Number(form.distance || 0) : 0,
-      reps: ['Push Up', 'Sit Up', 'Pull Up'].includes(form.activityType) ? Number(form.reps || 0) : 0
+      duration: inputDuration,
+      distance: type === 'Lari' ? inputDistance : 0,
+      reps: ['Push Up', 'Sit Up', 'Pull Up'].includes(type) ? inputReps : 0
     };
 
     try {
@@ -194,31 +198,35 @@ export default function FitPoinHome() {
       const result = await res.json();
 
       if (res.ok && result.success) {
-        
-        // Cek instan apakah progress bertambah setelah submit ini
-        const newStats = { ...statsPersonal };
-        if (payload.activityType === 'Push Up') newStats.pushUp += payload.reps;
-        if (payload.activityType === 'Sit Up') newStats.sitUp += payload.reps;
-        if (payload.activityType === 'Pull Up') newStats.pullUp += payload.reps;
-        if (payload.activityType === 'Plank') newStats.plankMenit += payload.duration;
-        if (payload.activityType === 'Lari' && payload.distance >= 2.5 && payload.duration <= 15) newStats.lariSempurna = true;
+        // CEK APAKAH INPUTAN BARU INI MEMBUAT TARGET BOX JADI FULL TERISI
+        let pesanSelebrasi = null;
 
-        const newProgress = 
-          (newStats.pushUp >= SYARAT.push ? 1 : 0) +
-          (newStats.sitUp >= SYARAT.sit ? 1 : 0) +
-          (newStats.pullUp >= SYARAT.pull ? 1 : 0) +
-          (newStats.plankMenit >= SYARAT.plank ? 1 : 0) +
-          (newStats.lariSempurna ? 1 : 0);
+        if (type === 'Push Up' && statsPersonal.pushUp < 50 && (statsPersonal.pushUp + inputReps) >= 50) {
+          pesanSelebrasi = "💪 SELEBRASI! Target Push Up 50/50 Selesai Terpenuhi!";
+        } else if (type === 'Sit Up' && statsPersonal.sitUp < 50 && (statsPersonal.sitUp + inputReps) >= 50) {
+          pesanSelebrasi = "🧘‍♂️ SELEBRASI! Target Sit Up 50/50 Selesai Terpenuhi!";
+        } else if (type === 'Pull Up' && statsPersonal.pullUp < 10 && (statsPersonal.pullUp + inputReps) >= 10) {
+          pesanSelebrasi = "🏋️‍♂️ SELEBRASI! Target Pull Up 10/10 Selesai Terpenuhi!";
+        } else if (type === 'Plank' && statsPersonal.plankMenit < 1 && (statsPersonal.plankMenit + inputDuration) >= 1) {
+          pesanSelebrasi = "⚡ SELEBRASI! Target Plank 1 Menit Selesai Terpenuhi!";
+        } else if (type === 'Lari' && !statsPersonal.lariSempurna && inputDistance >= 2.5 && inputDuration <= 15) {
+          pesanSelebrasi = "🏃‍♂️ SELEBRASI! Target Jarak Lari Sempurna Terpenuhi!";
+        }
 
-        // LOGIKA PERAYAAN VISUAL
-        if (newProgress > oldProgress) {
-          if (newProgress === 5) {
-            setCelebration("🏆 GOKIL! Target Sempurna Pekan Ini!");
-          } else {
-            setCelebration("🔥 Mantap! Ada Target Yang Tembus!");
-          }
-          // Hilangkan perayaan setelah 4 detik
-          setTimeout(() => setCelebration(null), 4000);
+        // Jika semua target mingguan jadi 5/5 berkat inputan ini
+        const currentCheckboxesDone = 
+          (statsPersonal.pushUp >= SYARAT.push ? 1 : 0) +
+          (statsPersonal.sitUp >= SYARAT.sit ? 1 : 0) +
+          (statsPersonal.pullUp >= SYARAT.pull ? 1 : 0) +
+          (statsPersonal.plankMenit >= SYARAT.plank ? 1 : 0) +
+          (statsPersonal.lariSempurna ? 1 : 0);
+
+        if (currentCheckboxesDone === 4 && pesanSelebrasi !== null) {
+          pesanSelebrasi = "🏆 GOKIL COMBO Sempurna! Semua Target Mingguan Habis Dibabat!";
+        }
+
+        if (pesanSelebrasi) {
+          setCelebration(pesanSelebrasi);
         } else {
           alert(result.message);
         }
@@ -244,16 +252,13 @@ export default function FitPoinHome() {
     const newLikes = [...likedPosts, id];
     setLikedPosts(newLikes);
     localStorage.setItem('fitpoin_likes', JSON.stringify(newLikes));
-
     try {
       await fetch('/api/activities', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
       });
-    } catch (error) {
-      console.error('Gagal nambah kudos di DB', error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   const handleDeleteActivity = async (id: string) => {
@@ -265,45 +270,45 @@ export default function FitPoinHome() {
       const result = await res.json();
       if (result.success) await fetchFeed();
       else alert(result.message);
-    } catch (error) {
-      console.error('Gagal menghapus aktivitas:', error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white font-sans p-4 md:p-8">
       
-      {/* CSS KHUSUS API MEMBARA BERGERAK */}
+      {/* CSS STYLE UNTUK ANIMASI STREAK API & POPUP */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes burn {
           0% { transform: translateY(0) rotate(-10deg) scale(1); filter: drop-shadow(0 0 2px rgba(255,100,0,0.5)); }
-          50% { transform: translateY(-2px) rotate(10deg) scale(1.2); filter: drop-shadow(0 0 8px rgba(255,100,0,0.8)); }
+          50% { transform: translateY(-3px) rotate(10deg) scale(1.25); filter: drop-shadow(0 0 10px rgba(255,68,0,0.8)); }
           100% { transform: translateY(0) rotate(-10deg) scale(1); filter: drop-shadow(0 0 2px rgba(255,100,0,0.5)); }
         }
         .fire-icon { 
-          animation: burn 0.8s infinite ease-in-out; 
+          animation: burn 0.7s infinite ease-in-out; 
           display: inline-block; 
         }
-        @keyframes pop {
-          0% { transform: scale(0.8); opacity: 0; }
+        @keyframes popUp {
+          0% { transform: scale(0.7); opacity: 0; }
           100% { transform: scale(1); opacity: 1; }
         }
         .celebration-box {
-          animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
       `}} />
 
-      {/* OVERLAY NOTIFIKASI VISUAL SELEBRASI */}
+      {/* OVERLAY SELEBRASI POPUP VISUAL */}
       {celebration && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-           <div className="celebration-box bg-[#1e293b] p-8 rounded-2xl border-4 border-orange-500 shadow-[0_0_50px_rgba(249,115,22,0.5)] text-center max-w-sm mx-4">
-              <span className="text-7xl mb-4 block animate-bounce">🔥</span>
-              <h2 className="text-2xl font-black text-white">{celebration}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
+           <div className="celebration-box bg-[#1e293b] p-8 rounded-2xl border-4 border-orange-500 shadow-[0_0_60px_rgba(249,115,22,0.6)] text-center max-w-md mx-4 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-orange-500 to-green-500"></div>
+              <span className="text-7xl mb-3 block animate-bounce">🎉</span>
+              <h2 className="text-2xl font-black text-white leading-snug mb-2">{celebration}</h2>
+              <p className="text-sm text-slate-400 mb-6">Kerja keras lu kebukti di liga pekan ini. Respek, cuy!</p>
               <button 
                 onClick={() => setCelebration(null)} 
-                className="mt-6 w-full bg-orange-600 hover:bg-orange-500 transition-colors px-6 py-3 rounded-lg font-bold shadow-lg"
+                className="w-full bg-orange-600 hover:bg-orange-500 active:scale-95 transition-all px-6 py-3 rounded-xl font-bold shadow-md"
               >
-                Lanjut Tarung!
+                Lanjut Bakar Kalori!
               </button>
            </div>
         </div>
@@ -319,15 +324,16 @@ export default function FitPoinHome() {
         </div>
       </header>
 
+      {/* BOX CHECKLIST MINGGUAN DENGAN LABELS TOTAL REPS */}
       <section className="max-w-5xl mx-auto bg-[#1e293b] border border-slate-700 rounded-xl p-5 mb-8 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h2 className="text-base font-bold text-slate-200 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-400" />
-              Checklist Target Fisik Mingguan ({currentUser})
+              Target Perulangan & Repetisi Mingguan ({currentUser})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Target ini otomatis ter-reset setiap hari Senin jam 00:00.
+              Skor akumulasi ini otomatis ter-reset setiap hari Senin jam 00:00.
             </p>
           </div>
           <div className="text-right">
@@ -345,26 +351,26 @@ export default function FitPoinHome() {
 
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.pushUp >= SYARAT.push ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Push Up</span>
-            <div className="text-sm font-black mb-1">{statsPersonal.pushUp} / {SYARAT.push} Reps</div>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Push Up (Total Reps)</span>
+            <div className="text-sm font-black mb-1">{statsPersonal.pushUp} / {SYARAT.push}</div>
             <div className="flex justify-center">{statsPersonal.pushUp >= SYARAT.push ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.sitUp >= SYARAT.sit ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Sit Up</span>
-            <div className="text-sm font-black mb-1">{statsPersonal.sitUp} / {SYARAT.sit} Reps</div>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Sit Up (Total Reps)</span>
+            <div className="text-sm font-black mb-1">{statsPersonal.sitUp} / {SYARAT.sit}</div>
             <div className="flex justify-center">{statsPersonal.sitUp >= SYARAT.sit ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.pullUp >= SYARAT.pull ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Pull Up</span>
-            <div className="text-sm font-black mb-1">{statsPersonal.pullUp} / {SYARAT.pull} Reps</div>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Pull Up (Total Reps)</span>
+            <div className="text-sm font-black mb-1">{statsPersonal.pullUp} / {SYARAT.pull}</div>
             <div className="flex justify-center">{statsPersonal.pullUp >= SYARAT.pull ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
           <div className={`p-3 rounded-lg border text-center ${statsPersonal.plankMenit >= SYARAT.plank ? 'bg-green-500/10 border-green-500/30' : 'bg-[#0f172a] border-slate-700'}`}>
-            <span className="text-xs font-semibold text-slate-400 block mb-1">Plank</span>
-            <div className="text-sm font-black mb-1">{statsPersonal.plankMenit} / {SYARAT.plank} Menit</div>
+            <span className="text-xs font-semibold text-slate-400 block mb-1">Plank (Durasi Sesi)</span>
+            <div className="text-sm font-black mb-1">{statsPersonal.plankMenit} / {SYARAT.plank} Min</div>
             <div className="flex justify-center">{statsPersonal.plankMenit >= SYARAT.plank ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-red-400" />}</div>
           </div>
 
@@ -379,6 +385,8 @@ export default function FitPoinHome() {
       </section>
 
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+        
+        {/* FORM INPUT BARU */}
         <div className="md:col-span-1 bg-[#1e293b] p-6 rounded-xl border border-slate-700 h-fit shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <PlusCircle className="w-5 h-5 text-orange-500" />
@@ -470,6 +478,7 @@ export default function FitPoinHome() {
           </form>
         </div>
 
+        {/* REKAP KLASEMEN & TIMELINE */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-[#1e293b] p-5 rounded-xl border-2 border-orange-500/30 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -507,7 +516,6 @@ export default function FitPoinHome() {
                           {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
                         </span>
                         
-                        {/* RENDER NAMA & API MEMBARA JIKA DIA BERES TANPA CICIL */}
                         <span className={`text-sm font-bold flex items-center gap-1 ${isMeKlasemen ? 'text-orange-400' : 'text-white'}`}>
                           {user.username} {isMeKlasemen && '(Lu)'}
                           {user.fireCount > 0 && (
@@ -518,7 +526,6 @@ export default function FitPoinHome() {
                             </span>
                           )}
                         </span>
-
                       </div>
                       <div className="flex items-center gap-6 text-right">
                         <div>
@@ -556,7 +563,7 @@ export default function FitPoinHome() {
 
                 const isNoCicilPush = act.activityType === 'Push Up' && rp >= 50;
                 const isNoCicilSit = act.activityType === 'Sit Up' && rp >= 50;
-                const isNoCicilPull = act.activityType === 'Pull Up' && rp >= 50;
+                const isNoCicilPull = act.activityType === 'Pull Up' && rp >= 10;
                 const isNoCicilPlank = act.activityType === 'Plank' && dur >= 1;
                 const isLariSempurna = act.activityType === 'Lari' && dist >= 2.5 && dur <= 15;
 
@@ -579,7 +586,7 @@ export default function FitPoinHome() {
                         </span>
                         
                         {isSavageMode && (
-                          <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+                          <span className="bg-red-500/20 text-red-400 border border-green-500/30 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
                             <span className="fire-icon text-xs">🔥</span> {act.activityType === 'Lari' ? 'SEMPURNA' : 'NO CICIL'}
                           </span>
                         )}
