@@ -25,25 +25,28 @@ export async function POST(req: Request) {
     await connectMongoDB();
 
     let totalXP = 0;
-    const nominal = Number(reps || 0);       // Input "Jumlah" (Nominal Reps)
-    const tarikan = Number(duration || 0);   // Input "Reps" (Tarikan / Menit)
+    const jumlahSet = Number(reps || 0);       // Input Form "Jumlah" (SET)
+    const jumlahReps = Number(duration || 0);   // Input Form "Waktu" (REPETISI/MENIT)
     const dist = Number(distance || 0);
 
     if (activityType === 'Lari') {
-      totalXP = (dist * 50) + (tarikan * 5); // tarikan sbg menit
+      totalXP = (dist * 50) + (jumlahReps * 5);
     } else if (activityType === 'Plank') {
-      totalXP = tarikan * 15;                // tarikan sbg menit
+      totalXP = jumlahReps * 15;
     } else {
-      // LOGIKA XP TERBALIK: 1x Tarikan = XP Gila!
-      let multiplier = 5; // Default kalau dicicil 3x atau lebih
-      
-      if (tarikan <= 1) {
-        multiplier = 20; // 1x Reps (Savage Mode)
-      } else if (tarikan === 2) {
-        multiplier = 10; // 2x Reps (Setengahnya)
+      // LOGIKA TERBALIK UNTUK PUSH UP, SIT UP, PULL UP
+      const baseXP = jumlahSet * jumlahReps;
+      let bonusBeban = 0;
+
+      if (jumlahReps >= 1 && jumlahReps <= 5) {
+        bonusBeban = jumlahSet * 150; // Bonus Reps Kecil (Beban Maksimal)
+      } else if (jumlahReps >= 6 && jumlahReps <= 10) {
+        bonusBeban = jumlahSet * 80;
+      } else if (jumlahReps >= 11 && jumlahReps <= 20) {
+        bonusBeban = jumlahSet * 30;
       }
 
-      totalXP = nominal * multiplier;
+      totalXP = baseXP + bonusBeban;
     }
 
     const newActivity = await Activity.create({
@@ -51,8 +54,8 @@ export async function POST(req: Request) {
       activityType,
       title,
       distance: dist,
-      duration: tarikan, 
-      reps: nominal,      
+      duration: jumlahReps, // Disimpan sebagai Repetisi/Menit
+      reps: jumlahSet,      // Disimpan sebagai Set
       kudosCount: 0,
       earnedXP: totalXP
     });
